@@ -1,2 +1,9 @@
 COURSE.md
 PROGRESS.md
+.venv/
+*.bin
+*.o
+run
+/test_*
+!tokenizer.bin
+ref/*.npy
