@@ -13,6 +13,10 @@ int main(void) {
     float *rgot = malloc(n * sizeof(float));
     rmsnorm(rgot, rx, rw, n);
     fails += compare("rmsnorm", rgot, rexp, n, 1e-4f);
+    free(rx);
+    free(rw);
+    free(rexp);
+    free(rgot);
 
     // -- softmax
     float *sexp = load_bin("ref/s2_soft_out.bin", m);
@@ -31,6 +35,9 @@ int main(void) {
     for (int i = 0; i < m; i++) shifted[i] += 1000.0f;
     softmax(shifted, m);
     fails += compare("softmax shift-invar", shifted, sgot, m, 1e-4f);
+    free(sexp);
+    free(sgot);
+    free(shifted);
 
     // -- matmaul
     float *mx = load_bin("ref/s2_matmul_x.bin", n);
@@ -39,6 +46,11 @@ int main(void) {
     float *mgot = malloc(d * sizeof(float));
     matmul(mgot, mx, mw, n, d);
     fails += compare("matmul", mgot, mexp, d, 1e-4f);
+    free(mx);
+    free(mw);
+    free(mexp);
+    free(mgot);
 
     printf("\nSTAGE 2: %s\n", fails ? "FAIL" : "PASS");
+    return fails;
 }

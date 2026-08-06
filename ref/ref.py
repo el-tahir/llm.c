@@ -46,8 +46,41 @@ def stage2():
 
     dump("s2_matmul_out", matmul(mw, mx))
 
+#------------------------------
+# stage 3: token embeddings
+
+CHECKPOINT = os.path.join(os.path.dirname(REF_DIR), "stories15M.bin")
+
+def load_config(path: str) -> dict:
+    """read the 7-int32 header. mirrors read_checkpoint's config in run.c"""
+    dim, hidden_dim, n_layers, n_heads, n_kv_heads, vocab_size, seq_len = \
+    np.fromfile(path, dtype=np.int32, count=7)
+    return dict(dim=int(dim), hidden_dim=int(hidden_dim), n_layers=int(n_layers),
+        n_heads=int(n_heads), n_kv_heads=int(n_kv_heads),
+        vocab_size=int(vocab_size), seq_len=int(seq_len),
+        shared=bool(vocab_size > 0))
+
+def load_embedding_table(path: str = CHECKPOINT):
+    """the table is the first tensor in the blob, right after the 28-byte header"""
+    p = load_config(path)
+    n = p["vocab_size"] * p["dim"]
+    tbl = np.fromfile(path, dtype=np.float32, count=n, offset=7 * 4)
+    return p, tbl.reshape(p["vocab_size"], p["dim"])
+
+S3_TOKENS = [0, 1, 2534, 31999]
+
+def stage3():
+    p, tbl = load_embedding_table()
+    print(f"config: {p}")
+    print(f"embedding table : {tbl.shape}")
+    for t in S3_TOKENS:
+        dump(f"s3_embed_{t}", tbl[t])
+
+
+
 if __name__ == "__main__":
     x = np.array([-3.0,-1.5, 0.0, 0.1, 1.0 / 3.0, 1.5, 3.14159265, 1e8])
     dump("stage0", x)
     print(x)
     stage2()
+    stage3()

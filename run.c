@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
 
 /* Transformer model */
 
@@ -40,6 +41,22 @@ typedef struct {
 
 } TransformerWeights;
 
+//allocated once and reused for every token
+typedef struct {
+    float *x; // residual stream : (dim, )
+} RunState;
+
+void malloc_run_state(RunState *s, Config *p) {
+    s->x = calloc(p->dim, sizeof(float));
+    if (!s->x) {
+        fprintf(stderr, "run state allocation failed\n");
+        exit(EXIT_FAILURE);
+    }
+}
+
+void free_run_state(RunState *s) {
+    free(s->x);
+}
 // walk 'ptr' through the weight blob, recording where each tensor starts
 // returns the address one past the end of the last tensor, for the size check
 float *memory_map_weights(TransformerWeights *w, Config *p, float *ptr, int shared_weights) {
@@ -193,6 +210,12 @@ void read_checkpoint(const char *path, Config *config, TransformerWeights *weigh
             }
             xout[i] = val;
         }
+    }
+
+    //copy row 'token' of the embedding table into the residual stream
+    void embed_token(float *x, TransformerWeights *w, int token, int dim) {
+        float *row = w->token_embedding_table + (long long)token * dim;
+        memcpy(x, row, dim * sizeof(float));
     }
 
     #ifndef TESTING

@@ -2,7 +2,7 @@ CC = gcc
 CFLAGS = -Wall -Wextra -std=c11 -O2
 LDLIBS = -lm
 
-TESTS = test_stage0 test_primitives
+TESTS = test_stage0 test_primitives test_embedding
 
 tests: $(TESTS)
 

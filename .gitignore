@@ -1,5 +1,5 @@
-COURSE.md
-PROGRESS.md
+*.md
+!README.md
 .venv/
 *.bin
 *.o
