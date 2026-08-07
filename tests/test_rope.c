@@ -1,5 +1,6 @@
-#define TESTING
-#include "../run.c"
+#include <string.h>
+
+#include "tinyllm.h"
 #include "test_common.h"
 
 // rotate copies of q0 and k0 to positions m and n, return their dot product

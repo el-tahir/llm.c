@@ -1,5 +1,4 @@
-#define TESTING
-#include "../run.c"
+#include "tinyllm.h"
 #include "test_common.h"
 
 int main(void) {
