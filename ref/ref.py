@@ -76,6 +76,36 @@ def stage3():
     for t in S3_TOKENS:
         dump(f"s3_embed_{t}", tbl[t])
 
+#--------------------------
+# stage 4: rotary position embeddings
+
+def rope(v, head_size, pos):
+    """rotate each adjacent pair of v by pos * theta_i. returns a new array"""
+    v = np.array(v, dtype=np.float32)
+    for i in range(0, v.shape[0], 2):
+        pair = (i % head_size) // 2; # pair index within this head
+        theta = 10000.0 ** (-2.0 * pair / head_size)
+        a = pos * theta
+        cos, sin = np.cos(a), np.sin(a)
+        x0, x1 = v[i], v[i + 1] # read both before writing either
+        v[i] = x0 * cos - x1 * sin
+        v[i + 1] = x0 * sin + x1 * cos
+    return v
+
+S4_POSITIONS = [0, 1, 5, 42, 255]
+
+def stage4():
+    rng = np.random.default_rng(4)
+    dim, head_size = 288, 48
+    q = dump("s4_q", rng.standard_normal(dim))
+    k = dump("s4_k", rng.standard_normal(dim))
+    for pos in S4_POSITIONS:
+        dump(f"s4_q_rope_{pos}", rope(q, head_size, pos))
+        dump(f"s4_k_rope_{pos}", rope(k, head_size, pos))
+
+
+
+
 
 
 if __name__ == "__main__":
@@ -84,3 +114,4 @@ if __name__ == "__main__":
     print(x)
     stage2()
     stage3()
+    stage4()
