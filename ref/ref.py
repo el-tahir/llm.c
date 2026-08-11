@@ -103,6 +103,85 @@ def stage4():
         dump(f"s4_q_rope_{pos}", rope(q, head_size, pos))
         dump(f"s4_k_rope_{pos}", rope(k, head_size, pos))
 
+#--------------------
+# stage 5: single-head causal attention with a kv cache
+
+def load_weights(path: str = CHECKPOINT):
+    """walk the blob tensor by tensor. mirror's memory_map_weights"""
+    p = load_config(path)
+    p["vocab_size"] = abs(p["vocab_size"]) # the sign was the shared-classifier flag
+    blob = np.fromfile(path, dtype=np.float32, offset=7 * 4)
+
+    dim, hidden_dim, n_layers = p["dim"], p["hidden_dim"], p["n_layers"]
+    head_size = dim // p["n_heads"]
+    kv_dim = p["n_kv_heads"] * head_size
+
+    w, off = {}, 0
+    def take(name, *shape):
+        nonlocal off
+        n = int(np.prod(shape))
+        w[name] = blob[off: off + n].reshape(shape)
+        off += n
+
+    take("token_embedding_table", p["vocab_size"], dim)
+    take("rms_att_weight", n_layers, dim)
+    take("wq", n_layers, dim, dim)
+    take("wk", n_layers, kv_dim, dim)
+    take("wv", n_layers, kv_dim, dim)
+    take("wo", n_layers, dim, dim)
+    take("rms_ffn_weight", n_layers, dim)
+    take("w1", n_layers, hidden_dim, dim)
+    take("w2", n_layers, dim, hidden_dim)
+    take("w3", n_layers, hidden_dim, dim)
+    take("rms_final_weight", dim)
+    off += p["seq_len"] * head_size // 2 # skip legacy freq_cos
+    off += p["seq_len"] * head_size // 2 # skip leagacy freq_sin
+
+    if p["shared"]:
+        w["wcls"] = w["token_embedding_table"]
+    else:
+        take("wcls", p["vocab_size"], dim)
+
+    assert off == blob.size, f"layout mismatch: walked {off} of {blob.size} floats"
+    return p, w
+
+S5_T = 5 # sequence length for the equivalence test
+S5_LAYERS = [0, 3]
+
+def softmax_rows(m):
+    """softmax along each row"""
+    e = np.exp(m - np.max(m, axis=1, keepdims=True))
+    return (e / np.sum(e, axis=1, keepdims=True)).astype(np.float32)
+
+def attention_batch(x, wq, wk, wv, head_size):
+    """causal attention for head 0 over a whole sequence, computed at once.
+    deliberately not incremental and with no cache: it builds the full (T,T)
+    score matrix and masks the future with -inf, the way training does it"""
+
+    T = x.shape[0]
+    q = (x @ wq.T).astype(np.float32)
+    k = (x @ wk.T).astype(np.float32)
+    v = (x @ wv.T).astype(np.float32)
+    for t in range(T):
+        q[t] = rope(q[t], head_size, t) # each row rotated by its own position
+        k[t] = rope(k[t], head_size, t)
+    q, k, v = q[:, :head_size], k[:, :head_size], v[:, :head_size] # head 0
+
+    scores = (q @ k.T).astype(np.float32) / np.float32(np.sqrt(head_size))
+    scores[np.triu(np.ones((T, T), dtype=bool), k=1)] = -np.inf # causal mask
+    return (softmax_rows(scores) @ v).astype(np.float32)
+
+def stage5():
+    p, w = load_weights()
+    dim = p["dim"]
+    head_size = dim // p["n_heads"]
+
+    rng = np.random.default_rng(5)
+    x = dump("s5_xin", rng.standard_normal((S5_T, dim)))
+    for l in S5_LAYERS:
+        out = attention_batch(x, w["wq"][l], w["wk"][l], w["wv"][l], head_size)
+        for t in range(S5_T):
+            dump(f"s5_out_l{l}_{t}", out[t])
 
 
 
@@ -115,3 +194,4 @@ if __name__ == "__main__":
     stage2()
     stage3()
     stage4()
+    stage5()

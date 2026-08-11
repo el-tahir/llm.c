@@ -4,8 +4,19 @@
 #include "tinyllm.h"
 
 void malloc_run_state(RunState *s, Config *p) {
+    int head_size = p->dim / p->n_heads;
+    int kv_dim = p->n_kv_heads * head_size;
+
+    // 80 layers x 128k context would overflow an int here, so widen before multiplying
+    size_t cache = (size_t)p->n_layers * p->seq_len * kv_dim;
+
     s->x = calloc(p->dim, sizeof(float));
-    if (!s->x) {
+    s->q = calloc(p->dim, sizeof(float));
+    s->att = calloc(p->seq_len, sizeof(float));
+    s->key_cache = calloc(cache, sizeof(float));
+    s->value_cache = calloc(cache, sizeof(float));
+
+    if (!s->x || !s->q || !s->att || !s->key_cache || !s->value_cache) {
         fprintf(stderr, "run state allocation failed\n");
         exit(EXIT_FAILURE);
     }
@@ -13,6 +24,10 @@ void malloc_run_state(RunState *s, Config *p) {
 
 void free_run_state(RunState *s) {
     free(s->x);
+    free(s->q);
+    free(s->att);
+    free(s->key_cache);
+    free(s->value_cache);
 }
 // walk 'ptr' through the weight blob, recording where each tensor starts
 // returns the address one past the end of the last tensor, for the size check

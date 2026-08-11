@@ -42,6 +42,14 @@ typedef struct {
 //allocated once and reused for every token
 typedef struct {
     float *x; // residual stream : (dim, )
+    float *q; // query, all heads : (dim, )
+    float *att; // attention scores for one head : (seq_len, )
+
+    // every key and value ever computed, kept for the rest of the sequence.
+    // kv_dim = n_kv_heads * head_size
+    float *key_cache;   // (n_layers, seq_len, kv_dim)
+    float *value_cache; // (n_layers, seq_len, kv_dim)
+
 } RunState;
 
 /* model.c — loading the checkpoint and allocating scratch space */
@@ -65,5 +73,9 @@ void embed_token(float *x, TransformerWeights *w, int token, int dim);
 /* rope.c */
 
 void rope(float *v, int n, int head_size, int pos); // IN PLACE
+
+/* attention.c */
+void attention(float *out, float *xin, RunState *s, TransformerWeights *w,
+    Config *p, int layer, int pos);
 
 #endif
