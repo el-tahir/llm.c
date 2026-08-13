@@ -7,3 +7,4 @@ run
 /test_*
 !tokenizer.bin
 ref/*.npy
+*.pyc

@@ -21,10 +21,10 @@ typedef struct {
     float *rms_ffn_weight; // (n_layers, dim)
 
     //weights for the attention block
-    float *wq; // (n_layers, dim, n_heads * head_size)
-    float *wk; // (n_layers, dim, n_kv_heads * head_size)
-    float *wv; // (n_layers, dim, n_kv_heads * head_size)
-    float *wo; // (n_layers, n_heads * head_size, dim)
+    float *wq; // (n_layers, n_heads * head_size, dim)
+    float *wk; // (n_layers, n_kv_heads * head_size, dim)
+    float *wv; // (n_layers, n_kv_heads * head_size, dim)
+    float *wo; // (n_layers, dim, n_heads * head_size)
 
     //weights for the ffn
     float *w1; // (n_layers, hidden_dim, dim)
@@ -42,8 +42,9 @@ typedef struct {
 //allocated once and reused for every token
 typedef struct {
     float *x; // residual stream : (dim, )
+    float *xb; // the head's outputs, concatenated : (dim, )
     float *q; // query, all heads : (dim, )
-    float *att; // attention scores for one head : (seq_len, )
+    float *att; // attention scores, one row per head : (n_heads, seq_len )
 
     // every key and value ever computed, kept for the rest of the sequence.
     // kv_dim = n_kv_heads * head_size
@@ -75,6 +76,7 @@ void embed_token(float *x, TransformerWeights *w, int token, int dim);
 void rope(float *v, int n, int head_size, int pos); // IN PLACE
 
 /* attention.c */
+// 'out' is (dim, ) - the whole attention block's output, after wo
 void attention(float *out, float *xin, RunState *s, TransformerWeights *w,
     Config *p, int layer, int pos);
 

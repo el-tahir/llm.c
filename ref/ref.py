@@ -183,6 +183,115 @@ def stage5():
         for t in range(S5_T):
             dump(f"s5_out_l{l}_{t}", out[t])
 
+#------------------------------------
+# stage 6: multi-head attention with grouped-query support
+
+def mha_batch(x, wq, wk, wv, wo, n_heads, n_kv_heads):
+    """causal multi-head attention over a whole sequence, computed at once.
+    same batch style as attention_batch - full (T, T) scores, -inf mask - but
+    every head, with the kv sharing, plus wo.
+    returns (xb, out): the concatenated head outputs, and the block output"""
+
+    T, dim = x.shape
+    head_size = dim // n_heads
+    kv_mul = n_heads // n_kv_heads
+
+    q = (x @ wq.T).astype(np.float32)
+    k = (x @ wk.T).astype(np.float32)
+    v = (x @ wv.T).astype(np.float32)
+    for t in range(T):
+        q[t] = rope(q[t], head_size, t)
+        k[t] = rope(k[t], head_size, t)
+
+    mask = np.triu(np.ones((T, T), dtype=bool), k=1)
+    xb = np.zeros((T, dim), dtype=np.float32)
+    for h in range(n_heads):
+        kvh = h // kv_mul           #the  whole of GQA, again
+        qh = q[:, h   * head_size : (h +   1) * head_size]
+        kh = k[:, kvh * head_size : (kvh + 1) * head_size]
+        vh = v[:, kvh * head_size : (kvh + 1) * head_size]
+
+        s = (qh @ kh.T).astype(np.float32) / np.float32(np.sqrt(head_size))
+        s[mask] = -np.inf
+        xb[:, h * head_size : (h + 1) * head_size] = softmax_rows(s) @ vh
+
+    return xb, (xb @ wo.T).astype(np.float32)
+
+S6_GQA = dict(dim=48, hidden_dim=128, n_layers=2, n_heads=6, n_kv_heads=2,
+    vocab_size=64, seq_len=16)
+
+def write_checkpoint(path, p, seed=6):
+    """write a tiny v0 checkpoint of random weights, in exactly the layout
+    read_checkpoint walks. the point of it is n_kv_heads != n_heads, which
+    stories15M cannot give us"""
+    rng = np.random.default_rng(seed)
+    head_size = p["dim"] // p["n_heads"]
+    kv_dim = p["n_kv_heads"] * head_size
+    n_layers, dim, hidden_dim = p["n_layers"], p["dim"], p["hidden_dim"]
+
+    def g(*shape):
+        # 1/sqrt(dim) for the same reason as the stage 2 matmul weights: keeps
+        # the scores near unit spread, so softmax blends instead of saturating
+        return (rng.standard_normal(shape) / np.sqrt(dim)).astype(np.float32)
+
+    def norm(*shape):
+        return (1.0 + 0.1 * rng.standard_normal(shape)).astype(np.float32)
+
+    tensors = [
+        g(p["vocab_size"], dim),        # token_embedding_table
+        norm(n_layers, dim),            # rms_att_weight
+        g(n_layers, dim, dim),          # wq
+        g(n_layers, kv_dim, dim),       # wk
+        g(n_layers, kv_dim, dim),       # wv
+        g(n_layers, dim, dim),          # wo
+        norm(n_layers, dim),            # rms_ffn_weight
+        g(n_layers, hidden_dim, dim),   # w1
+        g(n_layers, dim, hidden_dim),   # w2
+        g(n_layers, hidden_dim, dim),   # w3
+        norm(dim),                      # rms_final_weight
+        np.zeros((p["seq_len"], head_size // 2), np.float32), # legacy freq_cos
+        np.zeros((p["seq_len"], head_size // 2), np.float32), # legacy freq_sin
+    ]
+    header = np.array([dim, hidden_dim, n_layers, p["n_heads"], p["n_kv_heads"],
+        p["vocab_size"], p["seq_len"]], np.int32)
+
+    with open(path, "wb") as f:
+        f.write(header.tobytes())
+        for t in tensors:
+            f.write(t.tobytes())
+    print(f"wrote {os.path.basename(path)}: {os.path.getsize(path)} bytes")
+
+S6_LAYERS = [0, 3] # same two layers as stage 5
+S6_GQA_T = 7 # sequence length for the synthetic model
+
+def stage6():
+    # part 1: stories15M, on exactly the same  bytes stage 5 used, so head 0's slice
+    # of the concatenation is comparable against the s5 dumps
+
+    p, w = load_weights()
+    x = np.fromfile(os.path.join(REF_DIR, "s5_xin.bin"),
+        dtype=np.float32).reshape(S5_T, p["dim"])
+
+    for l in S6_LAYERS:
+        _, out = mha_batch(x, w["wq"][l], w["wk"][l], w["wv"][l], w["wo"][l],
+            p["n_heads"], p["n_kv_heads"])
+
+        for t in range(S5_T):
+            dump(f"s6_out_l{l}_{t}", out[t])
+
+    # part 2: the synthetic model, the only place the kv mapping is not a no-op
+    path = os.path.join(REF_DIR, "gqa.bin")
+    write_checkpoint(path, S6_GQA)
+    gp, gw = load_weights(path)
+    rng = np.random.default_rng(66)
+    gx = dump("s6_gqa_x", rng.standard_normal((S6_GQA_T, gp["dim"])))
+
+    for l in range(gp["n_layers"]):
+        _, out = mha_batch(gx, gw["wq"][l], gw["wk"][l], gw["wv"][l], gw["wo"][l],
+            gp["n_heads"], gp["n_kv_heads"])
+        for t in range(S6_GQA_T):
+            dump(f"s6_gqa_out_l{l}_{t}", out[t])
+
 
 
 
@@ -195,3 +304,4 @@ if __name__ == "__main__":
     stage3()
     stage4()
     stage5()
+    stage6()

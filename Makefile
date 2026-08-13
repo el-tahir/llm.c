@@ -9,6 +9,10 @@ OBJ = $(SRC:.c=.o)
 TESTS = test_stage0 test_primitives test_embedding test_rope test_attention
 
 tests: $(TESTS)
+	@for t in $(TESTS); do \
+			echo "running $$t..."; \
+			./$$t || exit 1; \
+		done
 
 src/%.o: src/%.c src/tinyllm.h
 	$(CC) $(CFLAGS) -c -o $@ $<
