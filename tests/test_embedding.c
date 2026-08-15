@@ -43,7 +43,7 @@ int main(void) {
         }
     }
 
-    matmul(via_matmul, onehot, transposed, V, config.dim);
+    matmul(via_matmul, transposed, onehot, config.dim, V);
     embed_token(s.x, &weights, t, config.dim);
     fails += compare("one-hot == lookup", via_matmul, s.x, config.dim, 0.0f);
     free(transposed);

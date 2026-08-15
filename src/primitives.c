@@ -43,7 +43,7 @@ void softmax(float *x, int size) {
     }
 }
 
-void matmul(float *xout, float *x, float *w, int n, int d) {
+void matmul(float *xout, float *w, float *x, int d, int n) {
     // W (d, n) @ x (n, ) -> xout (d, )
     for (int i = 0; i < d; i++) {
         float val = 0.0f;

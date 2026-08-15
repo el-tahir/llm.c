@@ -68,7 +68,7 @@ void free_run_state(RunState *s);
 
 void rmsnorm(float *o, float *x, float *weight, int size);
 void softmax(float *x, int size); // IN PLACE
-void matmul(float *xout, float *x, float *w, int n, int d);
+void matmul(float *xout, float *w, float *x, int d, int n);
 
 /* embedding.c */
 

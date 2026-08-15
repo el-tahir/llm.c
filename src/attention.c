@@ -18,9 +18,9 @@ void attention(float *out, float *xin, RunState *s, TransformerWeights *w, Confi
         float *v = s->value_cache + layer_offset + (long long)pos * kv_dim;
 
         // project. k and v land directly in their cache slots - no copy
-        matmul(s->q, xin, w->wq + (long long)layer * dim * dim,    dim, dim);
-        matmul(k   , xin, w->wk + (long long)layer * dim * kv_dim, dim, kv_dim);
-        matmul(v   , xin, w->wv + (long long)layer * dim * kv_dim, dim, kv_dim);
+        matmul(s->q, w->wq + (long long)layer * dim * dim,    xin, dim,    dim);
+        matmul(k   , w->wk + (long long)layer * dim * kv_dim, xin, kv_dim, dim);
+        matmul(v   , w->wv + (long long)layer * dim * kv_dim, xin, kv_dim, dim);
 
         // position goes into q and k only. v is never dotted with anything
         rope(s->q, dim,    head_size, pos);
@@ -57,5 +57,5 @@ void attention(float *out, float *xin, RunState *s, TransformerWeights *w, Confi
         }
 
         // let the heads combine, and land back in the residual stream's basis
-        matmul(out, s->xb, w->wo + (long long)layer * dim * dim, dim, dim);
+        matmul(out, w->wo + (long long)layer * dim * dim, s->xb, dim, dim);
     }

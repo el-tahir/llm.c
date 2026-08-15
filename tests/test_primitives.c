@@ -43,7 +43,7 @@ int main(void) {
     float *mw = load_bin("ref/s2_matmul_w.bin", d * n);
     float *mexp = load_bin("ref/s2_matmul_out.bin", d);
     float *mgot = malloc(d * sizeof(float));
-    matmul(mgot, mx, mw, n, d);
+    matmul(mgot, mw, mx, d, n);
     fails += compare("matmul", mgot, mexp, d, 1e-4f);
     free(mx);
     free(mw);
