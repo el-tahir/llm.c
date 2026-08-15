@@ -46,6 +46,9 @@ typedef struct {
     float *q; // query, all heads : (dim, )
     float *att; // attention scores, one row per head : (n_heads, seq_len )
 
+    float *hb; // ffn hidden buffer : (hidden_dim, )
+    float *hb2; // ffn gate buffer  : (hidden_dim, )
+
     // every key and value ever computed, kept for the rest of the sequence.
     // kv_dim = n_kv_heads * head_size
     float *key_cache;   // (n_layers, seq_len, kv_dim)
@@ -79,5 +82,8 @@ void rope(float *v, int n, int head_size, int pos); // IN PLACE
 // 'out' is (dim, ) - the whole attention block's output, after wo
 void attention(float *out, float *xin, RunState *s, TransformerWeights *w,
     Config *p, int layer, int pos);
+
+/* ffn.c */
+void ffn(float *out, float *xin, RunState *s, TransformerWeights *w, Config *p, int layer);
 
 #endif

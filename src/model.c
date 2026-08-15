@@ -14,10 +14,13 @@ void malloc_run_state(RunState *s, Config *p) {
     s->xb = calloc(p->dim, sizeof(float));
     s->q = calloc(p->dim, sizeof(float));
     s->att = calloc(p->n_heads * p->seq_len, sizeof(float));
+    s->hb = calloc(p->hidden_dim, sizeof(float));
+    s->hb2 = calloc(p->hidden_dim, sizeof(float));
     s->key_cache = calloc(cache, sizeof(float));
     s->value_cache = calloc(cache, sizeof(float));
 
-    if (!s->x || !s->xb || !s->q || !s->att || !s->key_cache || !s->value_cache) {
+    if (!s->x   || !s->xb || !s->q || !s->att || !s->hb ||
+        !s->hb2 || !s->key_cache || !s->value_cache) {
         fprintf(stderr, "run state allocation failed\n");
         exit(EXIT_FAILURE);
     }
@@ -28,6 +31,8 @@ void free_run_state(RunState *s) {
     free(s->xb);
     free(s->q);
     free(s->att);
+    free(s->hb);
+    free(s->hb2);
     free(s->key_cache);
     free(s->value_cache);
 }

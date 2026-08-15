@@ -293,8 +293,37 @@ def stage6():
             dump(f"s6_gqa_out_l{l}_{t}", out[t])
 
 
+    #-------------------------------------
+    # stage 7: the swiglu feed-forward network
 
+def silu(v):
+    return v / (1.0 + np.exp(-v))
 
+def ffn_batch(x, w1, w2, w3):
+    """the feed-forward block for a batch of positions at once.
+    every row is independent"""
+    hb  = (x @ w1.T).astype(np.float32)
+    hb2 = (x @ w3.T).astype(np.float32)
+
+    return ((silu(hb) * hb2).astype(np.float32) @ w2.T).astype(np.float32)
+
+S7_LAYERS = [0, 3]
+
+def stage7():
+    p, w = load_weights()
+
+    # reuse stage 5's input. ffn is position-independent
+    x = np.fromfile(os.path.join(REF_DIR, "s5_xin.bin"),
+        dtype=np.float32).reshape(S5_T, p["dim"])
+
+    for l in S7_LAYERS:
+        out = ffn_batch(x, w["w1"][l], w["w2"][l], w["w3"][l])
+        for t in range(S5_T):
+            dump(f"s7_out_l{l}_{t}", out[t])
+
+    # swap w1, w2. C output must NOT match
+    swapped = ffn_batch(x, w["w3"][0], w["w2"][0], w["w1"][0])
+    dump("s7_swapped_l0_0", swapped[0])
 
 if __name__ == "__main__":
     x = np.array([-3.0,-1.5, 0.0, 0.1, 1.0 / 3.0, 1.5, 3.14159265, 1e8])
@@ -305,3 +334,4 @@ if __name__ == "__main__":
     stage4()
     stage5()
     stage6()
+    stage7()

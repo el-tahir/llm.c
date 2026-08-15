@@ -8,3 +8,4 @@ run
 !tokenizer.bin
 ref/*.npy
 *.pyc
+*.html

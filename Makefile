@@ -6,7 +6,7 @@ LDLIBS = -lm
 SRC = $(wildcard src/*.c)
 OBJ = $(SRC:.c=.o)
 
-TESTS = test_stage0 test_primitives test_embedding test_rope test_attention
+TESTS = test_stage0 test_primitives test_embedding test_rope test_attention test_ffn
 
 tests: $(TESTS)
 	@for t in $(TESTS); do \
