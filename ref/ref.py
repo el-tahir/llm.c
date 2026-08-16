@@ -325,6 +325,37 @@ def stage7():
     swapped = ffn_batch(x, w["w3"][0], w["w2"][0], w["w1"][0])
     dump("s7_swapped_l0_0", swapped[0])
 
+# ---------------------------------
+# stage 8: the whole forward pass
+
+def rmsnorm_rows(m, weight, eps=1e-5):
+    """rmsnorm on each row independently."""
+    ss = np.mean(m * m, axis=1, keepdims=True)
+    return ((m / np.sqrt(ss + eps)) * weight).astype(np.float32)
+
+def forward_batch(tokens, p, w):
+    """the entire model over a whole sequence at once"""
+    x = w["token_embedding_table"][tokens].astype(np.float32)
+
+    for l in range(p["n_layers"]):
+        xb = rmsnorm_rows(x, w["rms_att_weight"][l])
+        _, a = mha_batch(xb, w["wq"][l], w["wk"][l], w["wv"][l], w["wo"][l],
+            p["n_heads"], p["n_kv_heads"])
+        x = (x + a).astype(np.float32)
+
+        xb = rmsnorm_rows(x, w["rms_ffn_weight"][l])
+        x = (x + ffn_batch(xb, w["w1"][l], w["w2"][l], w["w3"][l])).astype(np.float32)
+    x = rmsnorm_rows(x, w["rms_final_weight"])
+    return (x @ w["wcls"].T).astype(np.float32)
+
+S8_TOKENS = [1, 306, 3186, 29889, 0, 31999, 450, 6635, 13, 2]
+
+def stage8():
+    p, w = load_weights()
+    logits = forward_batch(S8_TOKENS, p, w)
+    for t in range(len(S8_TOKENS)):
+        dump(f"s8_logits_{t}", logits[t])
+
 if __name__ == "__main__":
     x = np.array([-3.0,-1.5, 0.0, 0.1, 1.0 / 3.0, 1.5, 3.14159265, 1e8])
     dump("stage0", x)
@@ -335,3 +366,4 @@ if __name__ == "__main__":
     stage5()
     stage6()
     stage7()
+    stage8()

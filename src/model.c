@@ -12,15 +12,18 @@ void malloc_run_state(RunState *s, Config *p) {
 
     s->x = calloc(p->dim, sizeof(float));
     s->xb = calloc(p->dim, sizeof(float));
+    s->xb2 = calloc(p->dim, sizeof(float));
     s->q = calloc(p->dim, sizeof(float));
     s->att = calloc(p->n_heads * p->seq_len, sizeof(float));
     s->hb = calloc(p->hidden_dim, sizeof(float));
     s->hb2 = calloc(p->hidden_dim, sizeof(float));
     s->key_cache = calloc(cache, sizeof(float));
     s->value_cache = calloc(cache, sizeof(float));
+    s->logits = calloc(p->vocab_size, sizeof(float));
 
     if (!s->x   || !s->xb || !s->q || !s->att || !s->hb ||
-        !s->hb2 || !s->key_cache || !s->value_cache) {
+        !s->hb2 || !s->key_cache || !s->value_cache ||
+        !s->xb2 || !s->logits) {
         fprintf(stderr, "run state allocation failed\n");
         exit(EXIT_FAILURE);
     }
@@ -29,12 +32,14 @@ void malloc_run_state(RunState *s, Config *p) {
 void free_run_state(RunState *s) {
     free(s->x);
     free(s->xb);
+    free(s->xb2);
     free(s->q);
     free(s->att);
     free(s->hb);
     free(s->hb2);
     free(s->key_cache);
     free(s->value_cache);
+    free(s->logits);
 }
 // walk 'ptr' through the weight blob, recording where each tensor starts
 // returns the address one past the end of the last tensor, for the size check

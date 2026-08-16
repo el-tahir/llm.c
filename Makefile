@@ -1,12 +1,12 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c11 -O2 -Isrc
+CFLAGS = -Wall -Wextra -std=c11 -g -O0 -Isrc
 LDLIBS = -lm
 
 # every .c under src/ is part of the library. run.c lives at the root and holds main()
 SRC = $(wildcard src/*.c)
 OBJ = $(SRC:.c=.o)
 
-TESTS = test_stage0 test_primitives test_embedding test_rope test_attention test_ffn
+TESTS = test_stage0 test_primitives test_embedding test_rope test_attention test_ffn test_forward
 
 tests: $(TESTS)
 	@for t in $(TESTS); do \

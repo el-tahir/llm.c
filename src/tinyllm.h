@@ -43,6 +43,7 @@ typedef struct {
 typedef struct {
     float *x; // residual stream : (dim, )
     float *xb; // the head's outputs, concatenated : (dim, )
+    float *xb2; // a sublayer's output : (dim, )
     float *q; // query, all heads : (dim, )
     float *att; // attention scores, one row per head : (n_heads, seq_len )
 
@@ -53,6 +54,8 @@ typedef struct {
     // kv_dim = n_kv_heads * head_size
     float *key_cache;   // (n_layers, seq_len, kv_dim)
     float *value_cache; // (n_layers, seq_len, kv_dim)
+
+    float *logits; // (vocab_size, )
 
 } RunState;
 
@@ -85,5 +88,8 @@ void attention(float *out, float *xin, RunState *s, TransformerWeights *w,
 
 /* ffn.c */
 void ffn(float *out, float *xin, RunState *s, TransformerWeights *w, Config *p, int layer);
+
+/* forward.c */
+float *forward(RunState *s, TransformerWeights *w, Config *p, int token, int pos);
 
 #endif
