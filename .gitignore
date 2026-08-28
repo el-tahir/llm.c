@@ -9,3 +9,5 @@ run
 ref/*.npy
 *.pyc
 *.html
+compile_commands.json
+.cache/

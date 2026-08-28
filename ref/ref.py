@@ -356,6 +356,83 @@ def stage8():
     for t in range(len(S8_TOKENS)):
         dump(f"s8_logits_{t}", logits[t])
 
+#-------------------------------------------------
+# stage 9: sampling
+
+MASK64 = (1 << 64) - 1
+
+def random_u32(state):
+    """xorshift64*. python ints are unbounded, so the left shift
+    has to be masked back to 64 bits. C wraps for free"""
+    state ^= state >> 12
+    state ^= (state << 25) & MASK64
+    state ^= state >> 27
+    return state, ((state * 0x2545F4914F6CDD1D) & MASK64) >> 32
+
+def random_f32(state):
+    state, u = random_u32(state)
+    return state, (u >> 8) / 16777216.0
+
+S9_SEED  = 20240824
+S9_N     = 64
+S9_TOP_P  = 0.9
+S9_DRAWS = 100000
+S9_COINS = [0.0, 0.05, 0.17, 0.31, 0.42, 0.5,
+            0.63, 0.755, 0.86, 0.93, 0.977, 0.995]
+
+def sample_mult(probs, coin):
+    # a binary search over the cumulative sum - not the same as the C linear walk
+    cdf = np.cumsum(probs.astype(np.float64))
+    return min(int(np.searchsorted(cdf, coin, side="right")), len(probs) - 1)
+
+def nucleus(probs, top_p):
+    # indices sorted by descending probabilty
+    order = np.argsort(-probs, kind="stable")
+    cdf = np.cumsum(probs[order].astype(np.float64))
+    k = min(int(np.searchsorted(cdf, top_p, side="right")) + 1, len(probs))
+    return order, cdf, k
+
+def sample_top_p(probs, top_p, coin):
+    order, cdf, k = nucleus(probs, top_p)
+    r = coin * cdf[k - 1]
+    j = min(int(np.searchsorted(cdf[:k], r, side="right")), k - 1)
+    return int(order[j])
+
+def stage9():
+    rng = np.random.default_rng(9)
+    logits = (2.2 * rng.standard_normal(S9_N)).astype(np.float32)
+
+    # dump() returns the fp32 array, so every number below is computed from
+    # exactly the bytes C will read from disk
+    probs = dump("s9_probs", softmax(logits))
+
+    # qsort is not stable and argsort is: a tie would let the two
+    # implementations disagree for a reason that is not a bug
+    assert len(np.unique(probs)) == S9_N, "toy probabilties contain a tie"
+
+    state = S9_SEED
+    stream = []
+    for _ in range(16):
+        state, f = random_f32(state)
+        stream.append(f)
+    dump("s9_rng", stream)
+
+    dump("s9_mult", [sample_mult(probs, c) for c in S9_COINS])
+    dump("s9_top_p", [sample_top_p(probs, S9_TOP_P, c) for c in S9_COINS])
+
+    # truncated, renormalized distribution: zero outside the nuclues.
+    # doubles as the nuclues mask for the containment property in C
+    order, _, k = nucleus(probs, S9_TOP_P)
+    trunc = np.zeros(S9_N)
+    trunc[order[:k]] = probs[order[:k]] / probs[order[:k]].sum()
+    dump("s9_trunc", trunc)
+    print(f"    nucleus: {k} of {S9_N} tokens, ids {sorted(order[:k].tolist())}")
+
+    # greedy decoding on the real model, one id per position
+    p, w = load_weights()
+    L = forward_batch(S8_TOKENS, p, w)
+    dump("s9_argmax", [int(np.argmax(L[t])) for t in range(len(S8_TOKENS))])
+
 if __name__ == "__main__":
     x = np.array([-3.0,-1.5, 0.0, 0.1, 1.0 / 3.0, 1.5, 3.14159265, 1e8])
     dump("stage0", x)
@@ -367,3 +444,4 @@ if __name__ == "__main__":
     stage6()
     stage7()
     stage8()
+    stage9()

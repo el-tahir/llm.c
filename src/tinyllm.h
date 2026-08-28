@@ -92,4 +92,32 @@ void ffn(float *out, float *xin, RunState *s, TransformerWeights *w, Config *p, 
 /* forward.c */
 float *forward(RunState *s, TransformerWeights *w, Config *p, int token, int pos);
 
+/* sampler.c */
+// a probability with its token id, to survive sorting
+typedef struct {
+    float prob;
+    int index;
+} ProbIndex;
+
+typedef struct {
+    int vocab_size;
+    ProbIndex *prob_index; // scratch for top_p, allocated once
+    float temperature;
+    float top_p;
+    unsigned long long rng_state;
+} Sampler;
+
+void malloc_sampler(Sampler *s, int vocab_size, float temperature, float top_p,
+    unsigned long long rng_seed);
+void free_sampler(Sampler *s);
+
+unsigned int random_u32(unsigned long long *state);
+float random_f32(unsigned long long *state); // uniform in [0, 1)
+
+int sample_argmax(float *probabilites, int n);
+int sample_mult(float *probabilites, int n, float coin);
+int sample_top_p(float *probabilites, int n, float top_p, ProbIndex *prob_index, float coin);
+
+int sample(Sampler *s, float *logits);
+
 #endif
