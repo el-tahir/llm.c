@@ -59,6 +59,49 @@ static int compare(const char *label, const float *actual, const float *expected
     return 1;
 }
 
+static inline unsigned char *load_bytes(const char *path, long *n) {
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        fprintf(stderr, "load_bytes: cannot open %s\n", path);
+        exit(1);
+    }
+
+    fseek(f, 0, SEEK_END);
+    long bytes = ftell(f);
+    rewind(f);
+
+    unsigned char *buf = malloc(bytes);
+    if (!buf) {
+        fprintf(stderr, "load_bytes: malloc of %ld bytes failed\n", bytes);
+        exit(1);
+    }
+
+    if (fread(buf, sizeof(char), bytes, f) != (size_t)bytes) {
+        fprintf(stderr, "load_bytes: short read on %s\n", path);
+        exit(1);
+    }
+
+    fclose(f);
+
+    *n = bytes;
+    return buf;
+}
+
+static inline int compare_bytes(const char *label, const unsigned char *actual,
+                  const unsigned char *expected, long n) {
+
+    for (long i = 0; i < n; i++) {
+        if (actual[i] != expected[i]) {
+            printf(" FAIL %-22s mismatch at index %ld: got 0x%02X, want 0x%02X\n",
+                label, i, actual[i], expected[i]);
+            return 1;
+        }
+    }
+
+    printf(" ok %-22s %ld bytes match\n", label, n);
+    return 0;
+}
+
 
 
 #endif

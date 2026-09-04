@@ -120,4 +120,21 @@ int sample_top_p(float *probabilites, int n, float top_p, ProbIndex *prob_index,
 
 int sample(Sampler *s, float *logits);
 
+
+/* tokenizer.c */
+typedef struct {
+    char **vocab; // vocab_size strings, each malloc'd seperately
+    float *vocab_scores;
+    int vocab_size;
+    unsigned int max_token_length;
+    unsigned char byte_pieces[512];
+} Tokenizer;
+
+void malloc_tokenizer(Tokenizer *t, const char *path, int vocab_size);
+void free_tokenizer(Tokenizer *t);
+
+char *decode(Tokenizer *t, int prev_token, int token);
+
+void safe_printf(char *piece);
+
 #endif

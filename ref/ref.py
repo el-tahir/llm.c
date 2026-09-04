@@ -1,16 +1,27 @@
 import os
 import numpy as np
 import numpy.typing as npt
+import struct
+import re
 
 REF_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def dump(name: str, arr: npt.ArrayLike) -> npt.NDArray[np.float32]:
-    """ Write arr to ref/<name>.bin as raw fp32: no header, no shape, just values."""
+    """Write arr to ref/<name>.bin as raw fp32: no header, no shape, just values."""
     arr = np.asarray(arr, dtype=np.float32)
     path = os.path.join(REF_DIR, name + ".bin")
     arr.tofile(path)
     print(f"dumped {name}.bin shape={arr.shape} n={arr.size} bytes={arr.nbytes}")
     return arr
+
+def dump_bytes(name: str, b: bytes) -> bytes:
+    """write raw bytes to ref/<name>.bin. no header, no nothing, pure bytes"""
+    path = os.path.join(REF_DIR, name + ".bin")
+    with open(path, "wb") as f:
+        f.write(b)
+    print(f"dumped {name}.bin bytes={len(b)}")
+    return b
+
 
 #------------------------------------
 # stage 2: the three primitives
@@ -433,6 +444,64 @@ def stage9():
     L = forward_batch(S8_TOKENS, p, w)
     dump("s9_argmax", [int(np.argmax(L[t])) for t in range(len(S8_TOKENS))])
 
+#--------------------------------------------
+# stage 10: tokenizer decode
+
+TOKENIZER = os.path.join(os.path.dirname(REF_DIR), "tokenizer.bin")
+
+def load_vocab(path=TOKENIZER, vocab_size=32000):
+    """walk the tape"""
+    with open(path, "rb") as f:
+        blob = f.read()
+    off = 0
+    (max_len,) = struct.unpack_from("<i", blob, off); off += 4
+    toks, scores = [], []
+    for _ in range(vocab_size):
+        (sc,) = struct.unpack_from("<f", blob, off); off += 4
+        (ln,) = struct.unpack_from("<i", blob, off); off += 4
+        toks.append(blob[off:off + ln]); off += ln
+        scores.append(sc)
+    assert off == len(blob), f"consumed {off} of {len(blob)} bytes - vocab_size is wrong"
+    return max_len, toks, scores
+
+BYTE_FALLBACK = re.compile(rb"^<0x([0-9A-Fa-f]{2})>$")
+
+def decode(toks, prev_token, token):
+    piece = toks[token]
+    if prev_token == 1 and piece.startswith(b" "):
+        piece = piece[1:]
+    m = BYTE_FALLBACK.match(piece)
+    return bytes([int(m.group(1), 16)]) if m else piece
+
+S10_EMOJI = [243, 162, 155, 141] # 😊 — four byte fallbacks, none valid on its own
+
+def stage10():
+    max_len, toks, _ = load_vocab()
+    dump("s10_meta", [max_len, len(toks)])
+
+    # the whole vocab end to end
+    dump_bytes("s10_vocab", b"".join(toks))
+    dump("s10_lens", [len(t) for t in toks])
+
+    # test sequence:  BOS strip, <unk>, multi-byte token, a byte fallback
+    pieces = [decode(toks, S8_TOKENS[i - 1] if i else -1, S8_TOKENS[i])
+        for i in range(len(S8_TOKENS))]
+    dump_bytes("s10_decode", b"".join(pieces))
+    dump("s10_piece_lens", [len(p) for p in pieces])
+
+    # BOS test
+    dump_bytes("s10_bos",   decode(toks, 1,     9038))
+    dump_bytes("s10_nobos", decode(toks, 29889, 9038))
+
+    # a character the vocabulary has no token for
+    dump_bytes("s10_emoji", b"".join(decode(toks, -1, i) for i in S10_EMOJI))
+
+    # stage 9's greedy ids as text
+    g = np.fromfile(os.path.join(REF_DIR, "s9_argmax.bin"), dtype=np.float32).astype(int)
+    greedy = b"".join(decode(toks, S8_TOKENS[t], int(g[t])) for t in range(len(g)))
+    dump_bytes("s10_greedy", greedy)
+    print(f"     greedy : {greedy!r}")
+
 if __name__ == "__main__":
     x = np.array([-3.0,-1.5, 0.0, 0.1, 1.0 / 3.0, 1.5, 3.14159265, 1e8])
     dump("stage0", x)
@@ -445,3 +514,4 @@ if __name__ == "__main__":
     stage7()
     stage8()
     stage9()
+    stage10()
