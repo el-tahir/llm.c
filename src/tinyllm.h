@@ -122,19 +122,27 @@ int sample(Sampler *s, float *logits);
 
 
 /* tokenizer.c */
+
+typedef struct {
+    char *str;
+    int id;
+} TokenIndex;
+
 typedef struct {
     char **vocab; // vocab_size strings, each malloc'd seperately
     float *vocab_scores;
     int vocab_size;
     unsigned int max_token_length;
     unsigned char byte_pieces[512];
+    TokenIndex *sorted_vocab;
 } Tokenizer;
 
 void malloc_tokenizer(Tokenizer *t, const char *path, int vocab_size);
 void free_tokenizer(Tokenizer *t);
 
 char *decode(Tokenizer *t, int prev_token, int token);
-
+void encode(Tokenizer *t, const char *text, int bos, int eos, int *tokens, int *n_tokens);
+int str_lookup(char *str, TokenIndex *sorted_vocab, int vocab_size);
 void safe_printf(char *piece);
 
 #endif

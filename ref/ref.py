@@ -22,7 +22,13 @@ def dump_bytes(name: str, b: bytes) -> bytes:
     print(f"dumped {name}.bin bytes={len(b)}")
     return b
 
-
+def dump_ints(name: str, arr: npt.ArrayLike) -> npt.NDArray[np.int32]:
+    """write arr to ref/<name>.bin as raw int32"""
+    arr = np.asarray(arr, dtype=np.int32)
+    path = os.path.join(REF_DIR, name + ".bin")
+    arr.tofile(path)
+    print(f"dumped {name}.bin n={arr.size} bytes={arr.nbytes}")
+    return arr
 #------------------------------------
 # stage 2: the three primitives
 
@@ -502,6 +508,87 @@ def stage10():
     dump_bytes("s10_greedy", greedy)
     print(f"     greedy : {greedy!r}")
 
+#---------------------------------------
+# stage 11: text into ids
+
+def build_lookup(tokens):
+    """sorted_vocab as a dict instead of bsearch"""
+    lookup_table = {t: i for i, t in enumerate(tokens)}
+    assert len(lookup_table) == len(tokens), "two entries share a string"
+    return lookup_table
+
+def encode(tokens, scores, lookup_table, text, bos=True, eos=False):
+    ids = [1] if bos else []
+    if text:
+        ids.append(lookup_table[b" "]) # the dummy space
+
+    # python's utf-8 decoder (C does it by hand)
+    for ch in text:
+        code_point = ch.encode("utf-8")
+        if code_point in lookup_table:
+            ids.append(lookup_table[code_point])
+        else:
+            ids.extend(lookup_table[b"<0x%02X>" % b] for b in code_point)
+
+    while True:
+        best_score, best_id, best_idx = -1e10, -1, -1
+        for i in range(len(ids) - 1):
+            token_id = lookup_table.get(tokens[ids[i]] + tokens[ids[i + 1]], -1)
+            if token_id != -1 and scores[token_id] > best_score:
+                best_score, best_id, best_idx = scores[token_id], token_id, i
+        if best_idx == -1:
+            break
+        ids[best_idx:best_idx + 2] = [best_id]
+
+    if eos:
+        ids.append(2)
+
+    return ids
+
+S11_CORPUS = [
+    "Once",
+    "One day, Lily met a",
+    "Once upon a time, there was a little girl",
+    "",
+    "  ",
+    "a  b",
+    "café naïve",
+    "😊",
+    "I 😊 you",
+    "日本語",
+    "tab\there",
+    "MiXeD CaSe 123",
+    "   leading",
+    "trailing   ",
+]
+
+def stage11():
+    _, tokens, scores = load_vocab()
+    lookup_table = build_lookup(tokens)
+
+    def enc(text, bos=True, eos=False):
+        return encode(tokens, scores, lookup_table, text, bos, eos)
+
+    # one check per trap, so a failing label names which one broke
+    dump_ints("s11_once",   enc("Once"))                 # stage 10's 9038, built
+    dump_ints("s11_prompt", enc("One day, Lily met a"))  # stage 12's prompt
+    dump_ints("s11_spaces", enc("  "))                   # the -1e9 sentinel
+    dump_ints("s11_emoji",  enc("😊"))                   # byte fallback
+    dump_ints("s11_cjk",    enc("日本語"))                # codepoints, not bytes
+    dump_ints("s11_empty",  enc(""))                     # no dummy space
+    dump_ints("s11_flags",  enc("Once", bos=False, eos=True))
+
+    all_ids = [enc(s) for s in S11_CORPUS]
+    dump_ints("s11_corpus",      [i for ids in all_ids for i in ids])
+    dump_ints("s11_corpus_lens", [len(ids) for ids in all_ids])
+
+    for s, ids in zip(S11_CORPUS, all_ids):
+        back = b"".join(decode(tokens, ids[i - 1], ids[i]) for i in range(1, len(ids)))
+        assert back == s.encode("utf-8") , f"round trip broke on {s!r}: {back!r}"
+
+    print(f"      round trip : {len(S11_CORPUS)} strings, all exact")
+
+
 if __name__ == "__main__":
     x = np.array([-3.0,-1.5, 0.0, 0.1, 1.0 / 3.0, 1.5, 3.14159265, 1e8])
     dump("stage0", x)
@@ -515,3 +602,4 @@ if __name__ == "__main__":
     stage8()
     stage9()
     stage10()
+    stage11()

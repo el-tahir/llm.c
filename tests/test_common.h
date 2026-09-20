@@ -102,6 +102,63 @@ static inline int compare_bytes(const char *label, const unsigned char *actual,
     return 0;
 }
 
+// the files are raw int32
+_Static_assert(sizeof(int) == 4, "test_common.h: int must be 32 bits");
+
+// read a raw int32 file
+static inline int *load_ints(const char *path, int *n) {
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        fprintf(stderr, "load_ints: cannot open %s\n", path);
+        exit(1);
+    }
+
+    fseek(f, 0, SEEK_END);
+    long bytes = ftell(f);
+    rewind(f);
+
+    if (bytes % sizeof(int) != 0) {
+        fprintf(stderr, "load_ints: %s is %ld bytes, not a whole number of int32s\n", path, bytes);
+        exit(1);
+    }
+
+    int count = bytes / sizeof(int);
+
+    int *buf = malloc(bytes);
+    if (!buf) {
+        fprintf(stderr, "load_ints: malloc of %ld bytes failed\n", bytes);
+        exit(1);
+    }
+
+    if (fread(buf, sizeof(int), count, f) != (size_t)count) {
+        fprintf(stderr, "load_ints: short read on %s\n", path);
+        exit(1);
+    }
+    fclose(f);
+
+    *n = count;
+    return buf;
+}
+
+// ids are exact, no tolerance
+static inline int compare_ints(const char *label, const int *actual, int actual_n,
+    const int *expected, int expected_n) {
+        if (actual_n != expected_n) {
+            printf(" FAIL %-22s produced %d ids, reference has %d\n", label, actual_n, expected_n);
+            return 1;
+        }
+
+        for (int i = 0; i < actual_n; i++) {
+            if (actual[i] != expected[i]) {
+                printf(" FAIL %-22s mismatch at index %d: got %d, want %d\n",
+                    label, i, actual[i], expected[i]);
+                return 1;
+            }
+        }
+        printf(" ok %-22s %d ids match\n", label, actual_n);
+        return 0;
+    }
+
 
 
 #endif
