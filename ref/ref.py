@@ -589,6 +589,41 @@ def stage11():
     print(f"      round trip : {len(S11_CORPUS)} strings, all exact")
 
 
+#---------------------------
+# stage 12 : the loop
+
+S12_PROMPT = "One day, Lily met a"
+S12_STEPS = 256
+
+def generate_greedy(p, w, tokens, scores, lookup_table, prompt, steps):
+    ids = encode(tokens, scores, lookup_table, prompt)
+    while len(ids) - 1 < steps:
+        nxt = int(np.argmax(forward_batch(ids, p , w)[-1]))
+        if nxt == 1:
+            break
+        ids.append(nxt)
+    return ids
+
+def stage12():
+    p, w = load_weights()
+    _, tokens, scores = load_vocab()
+    lookup_table = build_lookup(tokens)
+
+    ids = generate_greedy(p, w, tokens, scores, lookup_table, S12_PROMPT, S12_STEPS)
+    dump_ints("s12_greedy", ids)
+
+    # exactly what ./run should write to stdout, byte for byte
+    text = b"".join(decode(tokens, ids[i - 1], ids[i]) for i in range(1, len(ids)))
+    dump_bytes("s12_text", text)
+
+    short = generate_greedy(p, w, tokens, scores, lookup_table, "", 12)
+    dump_ints("s12_empty", short)
+
+    print(f"    story : {len(ids)} ids, {len(text)} bytes")
+
+
+
+
 if __name__ == "__main__":
     x = np.array([-3.0,-1.5, 0.0, 0.1, 1.0 / 3.0, 1.5, 3.14159265, 1e8])
     dump("stage0", x)
@@ -603,3 +638,4 @@ if __name__ == "__main__":
     stage9()
     stage10()
     stage11()
+    stage12()

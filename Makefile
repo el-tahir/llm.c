@@ -6,13 +6,17 @@ LDLIBS = -lm
 SRC = $(wildcard src/*.c)
 OBJ = $(SRC:.c=.o)
 
-TESTS = test_stage0 test_primitives test_embedding test_rope test_attention test_ffn test_forward test_sampler test_tokenizer
+TESTS = test_stage0 test_primitives test_embedding test_rope test_attention test_ffn test_forward test_sampler test_tokenizer test_generate
 
 tests: $(TESTS)
 	@for t in $(TESTS); do \
 			echo "running $$t..."; \
 			./$$t || exit 1; \
 		done
+
+story: run
+	@./run stories15M.bin -t 0 -i "One day, Lily met a" -n 256 > /tmp/tinyllm_story.txt
+	@cmp /tmp/tinyllm_story.txt ref/s12_text.bin && echo " ok story                  935 bytes match"
 
 src/%.o: src/%.c src/tinyllm.h
 	$(CC) $(CFLAGS) -c -o $@ $<
@@ -26,4 +30,4 @@ run: run.c $(OBJ)
 clean:
 	rm -f run $(TESTS) $(OBJ)
 
-.PHONY: tests clean
+.PHONY: tests clean story

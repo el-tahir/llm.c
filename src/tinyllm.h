@@ -145,4 +145,16 @@ void encode(Tokenizer *t, const char *text, int bos, int eos, int *tokens, int *
 int str_lookup(char *str, TokenIndex *sorted_vocab, int vocab_size);
 void safe_printf(char *piece);
 
+/* generate.c */
+
+/* runs the model for up to 'steps' forward passes, writing token ids into out[0..n-1]
+ * where n is the return value. n counts the full sequence: out[0..prompt_len-1] is
+ * the encoded prompt, out[prompt_len..n-1] is new tokens. Pass out_prompt_len (or NULL)
+ * to recover prompt_len and isolate the new tokens.
+ * a NULL prompt is treated as ""
+ * returns 0 if the prompt doesnt fit in max_out
+ */
+int generate(RunState *s, TransformerWeights *w, Config *p, Tokenizer *t, Sampler *sampler,
+             const char *prompt, int steps, int *out, int max_out, int *out_prompt_len);
+
 #endif
