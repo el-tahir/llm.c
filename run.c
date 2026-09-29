@@ -72,11 +72,7 @@ int main(int argc, char **argv) {
     int need = (int)strlen(prompt) + 3;
     if (max_steps + 1 > need) need = max_steps + 1;
 
-    int *out = malloc(need * sizeof(int));
-    if (!out) {
-        fprintf(stderr, "run: malloc of %d ids failed\n", need);
-        exit(EXIT_FAILURE);
-    }
+    int *out = xmalloc(need * sizeof(int));
 
     int n_tokens = 0;
     struct timespec t0, t1;

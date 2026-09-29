@@ -35,11 +35,7 @@ int main(void) {
     free(expected);
 
     /* 3. the same twelve coins through the nuclues */
-    ProbIndex *pi = malloc(N * sizeof(ProbIndex));
-    if (!pi) {
-        fprintf(stderr, "test allocation failed\n");
-        exit(EXIT_FAILURE);
-    }
+    ProbIndex *pi = xmalloc(N * sizeof(ProbIndex));
 
     for (int i = 0; i < N_COINS; i++) {
         got[i] = (float)sample_top_p(probs, N, TOP_P, pi, coins[i]);

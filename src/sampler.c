@@ -1,5 +1,4 @@
 #include <stdlib.h>
-#include <stdio.h>
 
 #include "tinyllm.h"
 
@@ -10,12 +9,7 @@ void malloc_sampler(Sampler *s, int vocab_size, float temperature, float top_p,
     s->top_p = top_p;
     s->rng_state = rng_seed;
     // scratch for top_p, allocated once
-    s->prob_index = malloc(vocab_size * sizeof(ProbIndex));
-
-    if (!s->prob_index) {
-        fprintf(stderr, "malloc_sampler: allocation failed\n");
-        exit(EXIT_FAILURE);
-    }
+    s->prob_index = xmalloc(vocab_size * sizeof(ProbIndex));
 }
 
 void free_sampler(Sampler *s) {

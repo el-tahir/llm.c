@@ -1,6 +1,17 @@
 #ifndef TINYLLM_H
 #define TINYLLM_H
 
+#include <stddef.h>
+#include <stdio.h>
+
+/* util.c — every failure here is fatal: print a message and exit */
+
+_Noreturn void die(const char *fmt, ...); // printf-style, newline added
+void *xmalloc(size_t size);
+void *xcalloc(size_t n, size_t size);
+FILE *xfopen(const char *path, const char *mode);
+void xfread(void *buf, size_t size, size_t n, FILE *f, const char *path); // all n or die
+
 /* Transformer model */
 
 typedef struct {

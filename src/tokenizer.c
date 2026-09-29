@@ -15,60 +15,28 @@ static int hex_digit(char c) {
     if (c >= '0' && c <= '9') return c - '0';
     if (c >= 'A' && c <= 'F') return c - 'A' + 10;
     if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-    fprintf(stderr, "hex_digit: invalid hex character '%c'\n", c);
-    exit(EXIT_FAILURE);
+    die("hex_digit: invalid hex character '%c'", c);
 }
 
 void malloc_tokenizer(Tokenizer *t, const char *path, int vocab_size) {
     t->vocab_size = vocab_size;
 
-    FILE* f = fopen(path, "rb");
-    if (!f) {
-        fprintf(stderr, "malloc_tokenizer: cannot open file %s\n", path);
-        exit(EXIT_FAILURE);
-    }
+    FILE *f = xfopen(path, "rb");
+    xfread(&t->max_token_length, sizeof(unsigned int), 1, f, path);
 
-    if (fread(&t->max_token_length, sizeof(unsigned int), 1, f) != 1) {
-        fprintf(stderr, "malloc_tokenizer: failed to read header from %s\n", path);
-        exit(EXIT_FAILURE);
-    }
-
-    t->vocab = malloc(vocab_size * sizeof(*t->vocab));
-    if (!t->vocab) {
-        fprintf(stderr, "malloc_tokenizer: malloc of %zu bytes failed\n", vocab_size * sizeof(*t->vocab));
-        exit(EXIT_FAILURE);
-    }
-    t->vocab_scores = malloc(vocab_size * sizeof(*t->vocab_scores));
-    if (!t->vocab_scores) {
-        fprintf(stderr, "malloc_tokenizer: malloc of %zu bytes failed\n", vocab_size * sizeof(*t->vocab_scores));
-        exit(EXIT_FAILURE);
-    }
+    t->vocab = xmalloc(vocab_size * sizeof(*t->vocab));
+    t->vocab_scores = xmalloc(vocab_size * sizeof(*t->vocab_scores));
 
     for (int i = 0; i < vocab_size; i++) {
-        if (fread(&t->vocab_scores[i], sizeof(float), 1, f) != 1) {
-            fprintf(stderr, "malloc_tokenizer: failed to read score for token %d in %s\n", i, path);
-            exit(EXIT_FAILURE);
-        }
         int len;
-        if (fread(&len, sizeof(int), 1, f) != 1) {
-            fprintf(stderr, "malloc_tokenizer: failed to read length for token %d in %s\n", i, path);
-            exit(EXIT_FAILURE);
-        }
-
+        xfread(&t->vocab_scores[i], sizeof(float), 1, f, path);
+        xfread(&len, sizeof(int), 1, f, path);
         if (len < 0) {
-            fprintf(stderr, "malloc_tokenizer: invalid negative length %d for token %d in %s\n", len, i, path);
-            exit(EXIT_FAILURE);
+            die("malloc_tokenizer: invalid negative length %d for token %d in %s", len, i, path);
         }
 
-        char *token = malloc(len + 1);
-        if (!token) {
-            fprintf(stderr, "malloc_tokenizer: malloc of %d bytes failed\n", len + 1);
-            exit(EXIT_FAILURE);
-        }
-        if (fread(token, 1, len, f) != (size_t)len) {
-            fprintf(stderr, "malloc_tokenizer: failed to read token bytes for token %d in %s\n", i, path);
-            exit(EXIT_FAILURE);
-        }
+        char *token = xmalloc(len + 1);
+        xfread(token, 1, len, f, path);
         token[len] = '\0';
         t->vocab[i] = token;
     }
@@ -79,11 +47,7 @@ void malloc_tokenizer(Tokenizer *t, const char *path, int vocab_size) {
         t->byte_pieces[(2*i) + 1] = '\0';
     }
 
-    t->sorted_vocab = malloc(t->vocab_size * sizeof(TokenIndex));
-    if (!t->sorted_vocab) {
-        fprintf(stderr, "malloc_tokenizer: malloc of %zu bytes failed\n", t->vocab_size * sizeof(TokenIndex));
-        exit(EXIT_FAILURE);
-    }
+    t->sorted_vocab = xmalloc(t->vocab_size * sizeof(TokenIndex));
     for (int i = 0; i < t->vocab_size; i++) {
         t->sorted_vocab[i].str = t->vocab[i];
         t->sorted_vocab[i].id = i;
@@ -136,11 +100,7 @@ void encode(Tokenizer *t, const char *text, int bos, int eos, int *tokens, int *
     }
 
     unsigned int buf_size = t->max_token_length * 2 + 3;
-    char *str_buffer = malloc(buf_size);
-    if (!str_buffer) {
-        fprintf(stderr, "encode: malloc of %u bytes failed\n", buf_size);
-        exit(EXIT_FAILURE);
-    }
+    char *str_buffer = xmalloc(buf_size);
     size_t str_len = 0;
 
     for (const char *c = text; *c != '\0'; c++) {

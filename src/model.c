@@ -10,23 +10,16 @@ void malloc_run_state(RunState *s, Config *p) {
     // 80 layers x 128k context would overflow an int here, so widen before multiplying
     size_t cache = (size_t)p->n_layers * p->seq_len * kv_dim;
 
-    s->x = calloc(p->dim, sizeof(float));
-    s->xb = calloc(p->dim, sizeof(float));
-    s->xb2 = calloc(p->dim, sizeof(float));
-    s->q = calloc(p->dim, sizeof(float));
-    s->att = calloc(p->n_heads * p->seq_len, sizeof(float));
-    s->hb = calloc(p->hidden_dim, sizeof(float));
-    s->hb2 = calloc(p->hidden_dim, sizeof(float));
-    s->key_cache = calloc(cache, sizeof(float));
-    s->value_cache = calloc(cache, sizeof(float));
-    s->logits = calloc(p->vocab_size, sizeof(float));
-
-    if (!s->x   || !s->xb || !s->q || !s->att || !s->hb ||
-        !s->hb2 || !s->key_cache || !s->value_cache ||
-        !s->xb2 || !s->logits) {
-        fprintf(stderr, "malloc_run_state: allocation failed\n");
-        exit(EXIT_FAILURE);
-    }
+    s->x = xcalloc(p->dim, sizeof(float));
+    s->xb = xcalloc(p->dim, sizeof(float));
+    s->xb2 = xcalloc(p->dim, sizeof(float));
+    s->q = xcalloc(p->dim, sizeof(float));
+    s->att = xcalloc(p->n_heads * p->seq_len, sizeof(float));
+    s->hb = xcalloc(p->hidden_dim, sizeof(float));
+    s->hb2 = xcalloc(p->hidden_dim, sizeof(float));
+    s->key_cache = xcalloc(cache, sizeof(float));
+    s->value_cache = xcalloc(cache, sizeof(float));
+    s->logits = xcalloc(p->vocab_size, sizeof(float));
 }
 
 void free_run_state(RunState *s) {
@@ -92,16 +85,9 @@ float *memory_map_weights(TransformerWeights *w, Config *p, float *ptr, int shar
 // 'data' receives the malloc'd blob (must outlive every pointer in 'weights')
 void read_checkpoint(const char *path, Config *config, TransformerWeights *weights,
     float **data, long *file_size) {
-    FILE *file = fopen(path, "rb");
-    if (!file) {
-        fprintf(stderr, "read_checkpoint: cannot open file %s\n", path);
-        exit(EXIT_FAILURE);
-    }
+    FILE *file = xfopen(path, "rb");
     // the 7-int header maps exactly onto Config
-    if (fread(config, sizeof(Config), 1, file) != 1) {
-        fprintf(stderr, "read_checkpoint: failed to read header from %s\n", path);
-        exit(EXIT_FAILURE);
-    }
+    xfread(config, sizeof(Config), 1, file, path);
 
     // a negative vocab_size == "classifier is NOT shared" flag
     int shared_weights = config->vocab_size > 0;
@@ -111,15 +97,8 @@ void read_checkpoint(const char *path, Config *config, TransformerWeights *weigh
     *file_size = ftell(file);
     rewind(file);
 
-    *data = malloc(*file_size);
-    if (! *data) {
-        fprintf(stderr, "read_checkpoint: malloc of %ld bytes failed\n", *file_size);
-        exit(EXIT_FAILURE);
-    }
-    if (fread(*data, 1, *file_size, file) != (size_t)*file_size) {
-        fprintf(stderr, "read_checkpoint: failed to read %s\n", path);
-        exit(EXIT_FAILURE);
-    }
+    *data = xmalloc(*file_size);
+    xfread(*data, 1, *file_size, file, path);
     fclose(file);
 
     // weights begin immediately after the header
@@ -129,14 +108,12 @@ void read_checkpoint(const char *path, Config *config, TransformerWeights *weigh
     // the check: the walk must land on the last byte of the file exactly
     long consumed = (long)((char*)end - (char*)*data);
     if (consumed != *file_size) {
-        fprintf(stderr,
-            "read_checkpoint: layout mismatch in %s:\n"
+        die("read_checkpoint: layout mismatch in %s:\n"
             "walked to byte %ld\n"
             "file is  %ld bytes\n"
-            "off by %ld bytes (%ld floats)\n",
+            "off by %ld bytes (%ld floats)",
             path, consumed, *file_size,
             consumed - *file_size, (consumed - *file_size) / 4);
-        exit(EXIT_FAILURE);
     }
     fprintf(stderr, "loaded %s: %ld bytes, %d layers, dim=%d, vocab=%d, %s classifier\n",
         path, *file_size, config->n_layers, config->dim, config->vocab_size,
