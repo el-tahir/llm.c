@@ -1,5 +1,6 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c11 -g -O0 -Isrc
+WARN = -Wall -Wextra -std=c11 -Isrc
+CFLAGS = $(WARN) -g -O0
 LDLIBS = -lm
 
 # every .c under src/ is part of the library. run.c lives at the root and holds main()
@@ -27,7 +28,13 @@ test_%: tests/test_%.c tests/test_common.h $(OBJ)
 run: run.c $(OBJ)
 	$(CC) $(CFLAGS) -o run run.c $(OBJ) $(LDLIBS)
 
+# optimized build. cleans first so no -O0 objects get linked in; run 'make clean'
+# before going back to a debug build
+release:
+	$(MAKE) clean
+	$(MAKE) run CFLAGS="$(WARN) -O2"
+
 clean:
 	rm -f run $(TESTS) $(OBJ)
 
-.PHONY: tests clean story
+.PHONY: tests clean story release
