@@ -5,9 +5,9 @@
 *.o
 run
 /test_*
-!tokenizer.bin
 ref/*.npy
 *.pyc
 *.html
 compile_commands.json
 .cache/
+*.part
