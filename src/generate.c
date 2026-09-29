@@ -1,13 +1,11 @@
-#define _POSIX_C_SOURCE 199309L
-
 #include <stdio.h>
 #include <string.h>
-#include <time.h>
 
 #include "tinyllm.h"
 
 int generate(RunState *s, TransformerWeights *w, Config *p, Tokenizer *t, Sampler *sampler,
-             const char *prompt, int steps, int *out, int max_out, int *out_prompt_len) {
+             const char *prompt, int steps, int *out, int max_out, int *out_prompt_len,
+             TokenCallback on_token, void *ctx) {
     if (prompt == NULL) prompt = "";
 
     if (steps > p->seq_len) {
@@ -28,13 +26,8 @@ int generate(RunState *s, TransformerWeights *w, Config *p, Tokenizer *t, Sample
 
     if (out_prompt_len != NULL) *out_prompt_len = prompt_len;
 
-    struct timespec t0, t1;
-    clock_gettime(CLOCK_MONOTONIC, &t0);
-    int ran = 0;
-
     for (int pos = 0; pos < steps; pos++) {
         float *logits = forward(s, w, p, out[pos], pos);
-        ran++;
 
         int next_id;
         if (pos < prompt_len - 1) {
@@ -49,15 +42,7 @@ int generate(RunState *s, TransformerWeights *w, Config *p, Tokenizer *t, Sample
         out[pos + 1] = next_id;
         if (pos + 1 >= prompt_len) n = pos + 2;
 
-        safe_printf(decode(t, out[pos], next_id));
-        fflush(stdout);
-    }
-
-    clock_gettime(CLOCK_MONOTONIC, &t1);
-    double secs = (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9;
-    if (secs > 0.0) {
-        fprintf(stderr, "\n%d forward passes in %.2f s -> %.1f toks/s\n",
-            ran, secs, ran / secs);
+        if (on_token != NULL) on_token(decode(t, out[pos], next_id), ctx);
     }
 
     return n;

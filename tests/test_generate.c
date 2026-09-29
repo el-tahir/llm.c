@@ -25,10 +25,8 @@ int main(void) {
 
     int out[MAXOUT];
     int prompt_len = -1;
-    printf("\n");
     int n = generate(&state, &weights, &config, &t, &sampler,
-                         "One day, Lily met a", 10000, out, MAXOUT, &prompt_len);
-    printf("\n\n");
+                     "One day, Lily met a", 10000, out, MAXOUT, &prompt_len, NULL, NULL);
 
     int want_n;
     int *want = load_ints("ref/s12_greedy.bin", &want_n);
@@ -57,9 +55,8 @@ int main(void) {
 
     // a second run on the same RunState, and an empty prompt: prefill of length 1
     int e_out[64];
-    printf("\n");
-    int e_n = generate(&state, &weights, &config, &t, &sampler, "", 12, e_out, 64, NULL);
-    printf("\n\n");
+    int e_n = generate(&state, &weights, &config, &t, &sampler, "", 12, e_out, 64, NULL,
+                       NULL, NULL);
     want = load_ints("ref/s12_empty.bin", &want_n);
     fails += compare_ints("empty prompt", e_out, e_n, want, want_n);
     free(want);

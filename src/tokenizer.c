@@ -197,7 +197,7 @@ void encode(Tokenizer *t, const char *text, int bos, int eos, int *tokens, int *
     *n_tokens = write;
 }
 
-void safe_printf(char *piece) {
+void safe_printf(const char *piece) {
     if (piece == NULL) return;
     if (piece[0] == '\0') return;
 

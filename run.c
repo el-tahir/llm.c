@@ -1,9 +1,18 @@
+#define _POSIX_C_SOURCE 199309L
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
 #include "tinyllm.h"
+
+// streams each piece to stdout as soon as it is sampled, and counts them
+static void print_token(const char *piece, void *ctx) {
+    safe_printf(piece);
+    fflush(stdout);
+    (*(int *)ctx)++;
+}
 
 static void usage(const char *argv0) {
     fprintf(stderr, "usage: %s [checkpoint] [options]\n", argv0);
@@ -69,7 +78,17 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    generate(&state, &weights, &config, &tokenizer, &sampler, prompt, steps, out, need, NULL);
+    int n_tokens = 0;
+    struct timespec t0, t1;
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+    generate(&state, &weights, &config, &tokenizer, &sampler, prompt, steps, out, need, NULL,
+             print_token, &n_tokens);
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+
+    double secs = (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9;
+    if (secs > 0.0) {
+        fprintf(stderr, "\n%d tokens in %.2f s -> %.1f toks/s\n", n_tokens, secs, n_tokens / secs);
+    }
 
     free(out);
     free_sampler(&sampler);

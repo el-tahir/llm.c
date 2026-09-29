@@ -147,7 +147,7 @@ void free_tokenizer(Tokenizer *t);
 char *decode(Tokenizer *t, int prev_token, int token);
 void encode(Tokenizer *t, const char *text, int bos, int eos, int *tokens, int *n_tokens);
 int str_lookup(char *str, TokenIndex *sorted_vocab, int vocab_size);
-void safe_printf(char *piece);
+void safe_printf(const char *piece);
 
 /* generate.c */
 
@@ -157,8 +157,13 @@ void safe_printf(char *piece);
  * to recover prompt_len and isolate the new tokens.
  * a NULL prompt is treated as ""
  * returns 0 if the prompt doesnt fit in max_out
+ * on_token, if not NULL, is called with each decoded piece (prompt included) as it
+ * is produced, along with ctx. generate itself does no output
  */
+typedef void (*TokenCallback)(const char *piece, void *ctx);
+
 int generate(RunState *s, TransformerWeights *w, Config *p, Tokenizer *t, Sampler *sampler,
-             const char *prompt, int steps, int *out, int max_out, int *out_prompt_len);
+             const char *prompt, int steps, int *out, int max_out, int *out_prompt_len,
+             TokenCallback on_token, void *ctx);
 
 #endif
