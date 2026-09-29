@@ -3,9 +3,9 @@
 
 #include "tinyllm.h"
 
-int generate(RunState *s, TransformerWeights *w, Config *p, Tokenizer *t, Sampler *sampler,
-             const char *prompt, int steps, int *out, int max_out, int *out_prompt_len,
-             TokenCallback on_token, void *ctx) {
+int generate(Transformer *m, Tokenizer *t, Sampler *sampler, const char *prompt, int steps,
+             int *out, int max_out, int *out_prompt_len, TokenCallback on_token, void *ctx) {
+    Config *p = &m->config;
     if (prompt == NULL) prompt = "";
 
     if (steps > p->seq_len) {
@@ -27,7 +27,7 @@ int generate(RunState *s, TransformerWeights *w, Config *p, Tokenizer *t, Sample
     if (out_prompt_len != NULL) *out_prompt_len = prompt_len;
 
     for (int pos = 0; pos < steps; pos++) {
-        float *logits = forward(s, w, p, out[pos], pos);
+        float *logits = forward(m, out[pos], pos);
 
         int next_id;
         if (pos < prompt_len - 1) {

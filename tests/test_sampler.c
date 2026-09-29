@@ -73,21 +73,15 @@ int main(void) {
     const int tokens[] = {1, 306, 3186, 29889, 0, 31999, 450, 6635, 13, 2};
     const int T = sizeof(tokens) / sizeof(tokens[0]);
 
-    Config config;
-    TransformerWeights weights;
-    float *data = NULL;
-    long file_size = 0;
-    read_checkpoint("stories15M.bin", &config, &weights, &data, &file_size);
-
-    RunState s;
-    malloc_run_state(&s, &config);
+    Transformer m;
+    load_transformer(&m, "stories15M.bin");
 
     Sampler greedy;
-    malloc_sampler(&greedy, config.vocab_size, 0.0f, TOP_P, SEED);
+    malloc_sampler(&greedy, m.config.vocab_size, 0.0f, TOP_P, SEED);
 
     float ids[10];
     for (int pos = 0; pos < T; pos++) {
-        ids[pos] = (float)sample(&greedy, forward(&s, &weights, &config, tokens[pos], pos));
+        ids[pos] = (float)sample(&greedy, forward(&m, tokens[pos], pos));
     }
     expected = load_bin("ref/s9_argmax.bin", T);
     fails += compare("greedy ids", ids, expected, T, 0.0f);
@@ -98,18 +92,18 @@ int main(void) {
     temperature and softmaxes them in place - the buffer is destroyed by use */
     float a[10], b[10], c[10];
     Sampler sa, sb, sc;
-    malloc_sampler(&sa, config.vocab_size, 1.0f, TOP_P, SEED);
-    malloc_sampler(&sb, config.vocab_size, 1.0f, TOP_P, SEED);
-    malloc_sampler(&sc, config.vocab_size, 1.0f, TOP_P, SEED + 1);
+    malloc_sampler(&sa, m.config.vocab_size, 1.0f, TOP_P, SEED);
+    malloc_sampler(&sb, m.config.vocab_size, 1.0f, TOP_P, SEED);
+    malloc_sampler(&sc, m.config.vocab_size, 1.0f, TOP_P, SEED + 1);
 
     for (int pos = 0; pos < T; pos++) {
-        a[pos] = (float)sample(&sa, forward(&s, &weights, &config, tokens[pos], pos));
+        a[pos] = (float)sample(&sa, forward(&m, tokens[pos], pos));
     }
     for (int pos = 0; pos < T; pos++) {
-        b[pos] = (float)sample(&sb, forward(&s, &weights, &config, tokens[pos], pos));
+        b[pos] = (float)sample(&sb, forward(&m, tokens[pos], pos));
     }
     for (int pos = 0; pos < T; pos++) {
-        c[pos] = (float)sample(&sc, forward(&s, &weights, &config, tokens[pos], pos));
+        c[pos] = (float)sample(&sc, forward(&m, tokens[pos], pos));
     }
 
     fails += compare("same seed same ids", a, b, T, 0.0f);
@@ -127,8 +121,7 @@ int main(void) {
     free_sampler(&sa);
     free_sampler(&sb);
     free_sampler(&sc);
-    free_run_state(&s);
-    free(data);
+    free_transformer(&m);
 
     printf("\n STAGE 9: %s\n", fails ? "FAILS" : "PASS");
     return fails;

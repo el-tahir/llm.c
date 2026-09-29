@@ -6,14 +6,8 @@ int main(void) {
     const int tokens[] = {0, 1, 2534, 31999};
     const int n_tokens = sizeof(tokens) / sizeof(tokens[0]);
 
-    Config config;
-    TransformerWeights weights;
-    float *data = NULL;
-    long file_size = 0;
-    read_checkpoint("stories15M.bin", &config, &weights, &data, &file_size);
-
-    RunState s;
-    malloc_run_state(&s, &config);
+    Transformer m;
+    load_transformer(&m, "stories15M.bin");
 
     for (int i = 0; i < n_tokens; i++) {
         int t = tokens[i];
@@ -21,9 +15,9 @@ int main(void) {
         snprintf(path, sizeof(path), "ref/s3_embed_%d.bin", t);
         snprintf(label, sizeof(label), "embed token %d", t);
 
-        float *expected = load_bin(path, config.dim);
-        embed_token(s.x, &weights, t, config.dim);
-        fails += compare(label, s.x, expected, config.dim, 0.0f);
+        float *expected = load_bin(path, m.config.dim);
+        embed_token(m.state.x, &m.weights, t, m.config.dim);
+        fails += compare(label, m.state.x, expected, m.config.dim, 0.0f);
         free(expected);
 
     }
@@ -35,23 +29,22 @@ int main(void) {
     const int t = 3;
     onehot[t] = 1.0f;
 
-    float *transposed = malloc((size_t)config.dim * V * sizeof(float)); // table^T, (dim, V)
-    float *via_matmul = malloc(config.dim * sizeof(float));
+    float *transposed = malloc((size_t)m.config.dim * V * sizeof(float)); // table^T, (dim, V)
+    float *via_matmul = malloc(m.config.dim * sizeof(float));
     for (int v = 0; v < V; v++) {
-        for (int j = 0; j < config.dim; j++) {
-            transposed[j * V + v] = weights.token_embedding_table[v * config.dim + j];
+        for (int j = 0; j < m.config.dim; j++) {
+            transposed[j * V + v] = m.weights.token_embedding_table[v * m.config.dim + j];
         }
     }
 
-    matmul(via_matmul, transposed, onehot, config.dim, V);
-    embed_token(s.x, &weights, t, config.dim);
-    fails += compare("one-hot == lookup", via_matmul, s.x, config.dim, 0.0f);
+    matmul(via_matmul, transposed, onehot, m.config.dim, V);
+    embed_token(m.state.x, &m.weights, t, m.config.dim);
+    fails += compare("one-hot == lookup", via_matmul, m.state.x, m.config.dim, 0.0f);
     free(transposed);
     free(via_matmul);
 
     printf("\nSTAGE 3: %s\n", fails ? "FAIL" : "PASS");
-    free_run_state(&s);
-    free(data);
+    free_transformer(&m);
     return fails;
 
 }

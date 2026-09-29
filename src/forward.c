@@ -1,16 +1,20 @@
 #include "tinyllm.h"
 
-float *forward(RunState *s, TransformerWeights *w, Config *p, int token, int pos) {
+float *forward(Transformer *m, int token, int pos) {
+    Config *p = &m->config;
+    TransformerWeights *w = &m->weights;
+    RunState *s = &m->state;
+
     embed_token(s->x, w, token, p->dim);
 
     for (int l = 0; l < p->n_layers; l++) {
         rmsnorm(s->xb, s->x, w->rms_att_weight + (l * p->dim), p->dim);
-        attention(s->xb2, s->xb, s, w, p, l, pos);
+        attention(s->xb2, s->xb, m, l, pos);
 
         for (int i = 0; i < p->dim; i++) { s->x[i] += s->xb2[i]; }
 
         rmsnorm(s->xb, s->x, w->rms_ffn_weight + (l * p->dim), p->dim);
-        ffn(s->xb2, s->xb, s, w, p, l);
+        ffn(s->xb2, s->xb, m, l);
 
         for (int i = 0; i < p->dim; i++) { s->x[i] += s->xb2[i]; }
     }

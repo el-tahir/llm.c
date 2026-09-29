@@ -5,7 +5,10 @@ static float silu(float v) {
     return v / (1 + expf(-v));
 }
 
-void ffn(float *out, float *xin, RunState *s, TransformerWeights *w, Config *p, int layer) {
+void ffn(float *out, float *xin, Transformer *m, int layer) {
+    Config *p = &m->config;
+    TransformerWeights *w = &m->weights;
+    RunState *s = &m->state;
     long long layer_offset = (long long)layer * p->hidden_dim * p->dim;
 
     matmul(s->hb,  w->w1 + layer_offset, xin, p->hidden_dim, p->dim);

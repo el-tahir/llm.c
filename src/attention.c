@@ -5,8 +5,10 @@
 // 'xin' is the (already normalized) attention input for this position: (dim, )
 // 'out' receives the block's output, after wo: (dim, )
 
-void attention(float *out, float *xin, RunState *s, TransformerWeights *w, Config *p,
-    int layer, int pos) {
+void attention(float *out, float *xin, Transformer *m, int layer, int pos) {
+    Config *p = &m->config;
+    TransformerWeights *w = &m->weights;
+    RunState *s = &m->state;
     int dim = p->dim;
     int head_size = dim / p->n_heads;
     int kv_dim = p->n_kv_heads * head_size;

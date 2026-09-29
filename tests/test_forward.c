@@ -10,23 +10,17 @@ int main(void) {
     const int tokens[] = {1, 306, 3186, 29889, 0, 31999, 450, 6635, 13, 2};
     const int T = sizeof(tokens) / sizeof(tokens[0]);
 
-    Config config;
-    TransformerWeights weights;
-    float *data = NULL;
-    long file_size = 0;
-    read_checkpoint("stories15M.bin", &config, &weights, &data, &file_size);
+    Transformer m;
+    load_transformer(&m, "stories15M.bin");
 
-    RunState s;
-    malloc_run_state(&s, &config);
-
-    const int V = config.vocab_size;
+    const int V = m.config.vocab_size;
 
     for (int pos = 0; pos < T; pos++) {
         char ref[64], label[40];
         snprintf(ref, sizeof(ref), "ref/s8_logits_%d.bin", pos);
         snprintf(label, sizeof(label), "logits pos=%d", pos);
 
-        float *logits = forward(&s, &weights, &config, tokens[pos], pos);
+        float *logits = forward(&m, tokens[pos], pos);
         float *expected = load_bin(ref, V);
         fails += compare(label, logits, expected, V, 1e-4f);
         free(expected);
@@ -34,14 +28,14 @@ int main(void) {
 
     // non-vacuity: pos = 9 logits must actually depend on the 8 before it
 
-    const int head_size = config.dim / config.n_heads;
-    const int kv_dim = config.n_kv_heads * head_size;
-    const size_t cache = (size_t)config.n_layers * config.seq_len * kv_dim;
+    const int head_size = m.config.dim / m.config.n_heads;
+    const int kv_dim = m.config.n_kv_heads * head_size;
+    const size_t cache = (size_t)m.config.n_layers * m.config.seq_len * kv_dim;
 
     float *expected = load_bin("ref/s8_logits_9.bin", V);
-    memset(s.key_cache,   0, cache * sizeof(float));
-    memset(s.value_cache, 0, cache * sizeof(float));
-    float *logits = forward(&s, &weights, &config, tokens[T - 1], T - 1);
+    memset(m.state.key_cache,   0, cache * sizeof(float));
+    memset(m.state.value_cache, 0, cache * sizeof(float));
+    float *logits = forward(&m, tokens[T - 1], T - 1);
 
     float worst = 0.0f;
     for (int i = 0; i < V; i++) {
@@ -65,9 +59,9 @@ int main(void) {
     float tie = 0.0f;
 
     for (int j = 0; j < (int)(sizeof(probe) / sizeof(probe[0])); j++) {
-        float *row = weights.token_embedding_table + (long long)probe[j] * config.dim;
+        float *row = m.weights.token_embedding_table + (long long)probe[j] * m.config.dim;
         float dot = 0.0f;
-        for (int i = 0; i < config.dim; i++) { dot += s.x[i] * row[i]; }
+        for (int i = 0; i < m.config.dim; i++) { dot += m.state.x[i] * row[i]; }
         float d = fabsf(dot - logits[probe[j]]);
         if (d > tie) { tie = d; }
     }
@@ -75,8 +69,7 @@ int main(void) {
     printf(" %s %-22s logit == dot(x, embedding row), max %.3g\n",
         tie > 1e-4f ? "FAIL" : "ok", "weight tying", tie);
 
-    free_run_state(&s);
-    free(data);
+    free_transformer(&m);
 
     printf("\n STAGE 8: %s\n", fails ? "FAILS" : "PASS");
     return fails;

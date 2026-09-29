@@ -65,14 +65,11 @@ static int check_ids(Tokenizer *t, const char *label, const char *text,
 int main(void) {
     int fails = 0;
 
-    Config config;
-    TransformerWeights weights;
-    float *data = NULL;
-    long file_size = 0;
-    read_checkpoint("stories15M.bin", &config, &weights, &data, &file_size);
+    Transformer model;
+    load_transformer(&model, "stories15M.bin");
 
     Tokenizer t;
-    malloc_tokenizer(&t, "tokenizer.bin", config.vocab_size);
+    malloc_tokenizer(&t, "tokenizer.bin", model.config.vocab_size);
 
     // the header
     float meta[2] = { (float)t.max_token_length, (float)t.vocab_size };
@@ -263,7 +260,7 @@ int main(void) {
     printf("\n");
 
     free_tokenizer(&t);
-    free(data);
+    free_transformer(&model);
 
     printf("\n STAGES 10-11: %s\n", fails ? "FAILS" : "PASS");
     return fails;

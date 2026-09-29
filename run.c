@@ -53,22 +53,17 @@ int main(int argc, char **argv) {
     if (steps <= 0) steps = 256;
     if (seed == 0) seed = 1;
 
-    Config config;
-    TransformerWeights weights;
-    float *data = NULL;
-    long file_size = 0;
-    read_checkpoint(checkpoint, &config, &weights, &data, &file_size);
-
-    RunState state;
-    malloc_run_state(&state, &config);
+    Transformer model;
+    load_transformer(&model, checkpoint);
+    Config *config = &model.config;
 
     Tokenizer tokenizer;
-    malloc_tokenizer(&tokenizer, "tokenizer.bin", config.vocab_size);
+    malloc_tokenizer(&tokenizer, "tokenizer.bin", config->vocab_size);
 
     Sampler sampler;
-    malloc_sampler(&sampler, config.vocab_size, temperature, top_p, seed);
+    malloc_sampler(&sampler, config->vocab_size, temperature, top_p, seed);
 
-    int max_steps = steps < config.seq_len ? steps : config.seq_len;
+    int max_steps = steps < config->seq_len ? steps : config->seq_len;
     int need = (int)strlen(prompt) + 3;
     if (max_steps + 1 > need) need = max_steps + 1;
 
@@ -77,8 +72,7 @@ int main(int argc, char **argv) {
     int n_tokens = 0;
     struct timespec t0, t1;
     clock_gettime(CLOCK_MONOTONIC, &t0);
-    generate(&state, &weights, &config, &tokenizer, &sampler, prompt, steps, out, need, NULL,
-             print_token, &n_tokens);
+    generate(&model, &tokenizer, &sampler, prompt, steps, out, need, NULL, print_token, &n_tokens);
     clock_gettime(CLOCK_MONOTONIC, &t1);
 
     double secs = (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9;
@@ -89,7 +83,6 @@ int main(int argc, char **argv) {
     free(out);
     free_sampler(&sampler);
     free_tokenizer(&tokenizer);
-    free_run_state(&state);
-    free(data);
+    free_transformer(&model);
     return 0;
 }

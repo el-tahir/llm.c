@@ -3,7 +3,7 @@
 
 #include "tinyllm.h"
 
-void malloc_run_state(RunState *s, Config *p) {
+static void malloc_run_state(RunState *s, Config *p) {
     int head_size = p->dim / p->n_heads;
     int kv_dim = p->n_kv_heads * head_size;
 
@@ -22,7 +22,7 @@ void malloc_run_state(RunState *s, Config *p) {
     s->logits = xcalloc(p->vocab_size, sizeof(float));
 }
 
-void free_run_state(RunState *s) {
+static void free_run_state(RunState *s) {
     free(s->x);
     free(s->xb);
     free(s->xb2);
@@ -36,7 +36,7 @@ void free_run_state(RunState *s) {
 }
 // walk 'ptr' through the weight blob, recording where each tensor starts
 // returns the address one past the end of the last tensor, for the size check
-float *memory_map_weights(TransformerWeights *w, Config *p, float *ptr, int shared_weights) {
+static float *memory_map_weights(TransformerWeights *w, Config *p, float *ptr, int shared_weights) {
     int head_size = p->dim / p->n_heads;
     // the products overflow a 32-bit int on larger models, so widen once here
     unsigned long long n_layers = p->n_layers;
@@ -81,10 +81,10 @@ float *memory_map_weights(TransformerWeights *w, Config *p, float *ptr, int shar
     return ptr;
 }
 
-// load a checkpoint: header into 'config', weight pointers into 'weights'
-// 'data' receives the malloc'd blob (must outlive every pointer in 'weights')
-void read_checkpoint(const char *path, Config *config, TransformerWeights *weights,
-    float **data, long *file_size) {
+// load a checkpoint: header into m->config, weight pointers into m->weights
+// m->data receives the malloc'd blob (must outlive every pointer in m->weights)
+static void read_checkpoint(Transformer *m, const char *path) {
+    Config *config = &m->config;
     FILE *file = xfopen(path, "rb");
     // the 7-int header maps exactly onto Config
     xfread(config, sizeof(Config), 1, file, path);
@@ -94,28 +94,38 @@ void read_checkpoint(const char *path, Config *config, TransformerWeights *weigh
     config->vocab_size = abs(config->vocab_size);
 
     fseek(file, 0, SEEK_END);
-    *file_size = ftell(file);
+    long file_size = ftell(file);
     rewind(file);
 
-    *data = xmalloc(*file_size);
-    xfread(*data, 1, *file_size, file, path);
+    m->data = xmalloc(file_size);
+    xfread(m->data, 1, file_size, file, path);
     fclose(file);
 
     // weights begin immediately after the header
-    float *weights_ptr = *data + sizeof(Config) / sizeof(float);
-    float *end = memory_map_weights(weights, config, weights_ptr, shared_weights);
+    float *weights_ptr = m->data + sizeof(Config) / sizeof(float);
+    float *end = memory_map_weights(&m->weights, config, weights_ptr, shared_weights);
 
     // the check: the walk must land on the last byte of the file exactly
-    long consumed = (long)((char*)end - (char*)*data);
-    if (consumed != *file_size) {
+    long consumed = (long)((char*)end - (char*)m->data);
+    if (consumed != file_size) {
         die("read_checkpoint: layout mismatch in %s:\n"
             "walked to byte %ld\n"
             "file is  %ld bytes\n"
             "off by %ld bytes (%ld floats)",
-            path, consumed, *file_size,
-            consumed - *file_size, (consumed - *file_size) / 4);
+            path, consumed, file_size,
+            consumed - file_size, (consumed - file_size) / 4);
     }
     fprintf(stderr, "loaded %s: %ld bytes, %d layers, dim=%d, vocab=%d, %s classifier\n",
-        path, *file_size, config->n_layers, config->dim, config->vocab_size,
+        path, file_size, config->n_layers, config->dim, config->vocab_size,
         shared_weights ? "shared" : "separate");
+}
+
+void load_transformer(Transformer *m, const char *path) {
+    read_checkpoint(m, path);
+    malloc_run_state(&m->state, &m->config);
+}
+
+void free_transformer(Transformer *m) {
+    free_run_state(&m->state);
+    free(m->data);
 }

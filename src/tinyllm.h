@@ -68,13 +68,18 @@ typedef struct {
     float *logits; // (vocab_size, )
 } RunState;
 
+// everything forward() needs, loaded and allocated together
+typedef struct {
+    Config config;
+    TransformerWeights weights; // pointers into data
+    RunState state;
+    float *data; // the whole checkpoint file, owns the weights
+} Transformer;
+
 /* model.c — loading the checkpoint and allocating scratch space */
 
-float *memory_map_weights(TransformerWeights *w, Config *p, float *ptr, int shared_weights);
-void read_checkpoint(const char *path, Config *config, TransformerWeights *weights,
-                     float **data, long *file_size);
-void malloc_run_state(RunState *s, Config *p);
-void free_run_state(RunState *s);
+void load_transformer(Transformer *m, const char *path);
+void free_transformer(Transformer *m);
 
 /* primitives.c — the three building blocks */
 
@@ -92,14 +97,13 @@ void rope(float *v, int n, int head_size, int pos); // IN PLACE
 
 /* attention.c */
 // 'out' is (dim, ) - the whole attention block's output, after wo
-void attention(float *out, float *xin, RunState *s, TransformerWeights *w,
-    Config *p, int layer, int pos);
+void attention(float *out, float *xin, Transformer *m, int layer, int pos);
 
 /* ffn.c */
-void ffn(float *out, float *xin, RunState *s, TransformerWeights *w, Config *p, int layer);
+void ffn(float *out, float *xin, Transformer *m, int layer);
 
 /* forward.c */
-float *forward(RunState *s, TransformerWeights *w, Config *p, int token, int pos);
+float *forward(Transformer *m, int token, int pos);
 
 /* sampler.c */
 // a probability with its token id, to survive sorting
@@ -173,8 +177,7 @@ void safe_printf(const char *piece);
  */
 typedef void (*TokenCallback)(const char *piece, void *ctx);
 
-int generate(RunState *s, TransformerWeights *w, Config *p, Tokenizer *t, Sampler *sampler,
-             const char *prompt, int steps, int *out, int max_out, int *out_prompt_len,
-             TokenCallback on_token, void *ctx);
+int generate(Transformer *m, Tokenizer *t, Sampler *sampler, const char *prompt, int steps,
+             int *out, int max_out, int *out_prompt_len, TokenCallback on_token, void *ctx);
 
 #endif
