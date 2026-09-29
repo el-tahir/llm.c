@@ -3,7 +3,7 @@
 #include "tinyllm.h"
 
 // rotary position embedding, in place
-// v is n floats -> n / head_size consecutive heads; each head's headsize/2
+// v is n floats -> n / head_size consecutive heads; each head's head_size/2
 // adjacent pairs are rotated by pos * theta_i, theta_i = 10000^(-2i/head_size)
 void rope(float *v, int n, int head_size, int pos) {
     for (int i = 0; i < n; i += 2) {

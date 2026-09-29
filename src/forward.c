@@ -1,10 +1,6 @@
-#include <stdio.h>
-#include <stdlib.h>
-
 #include "tinyllm.h"
 
 float *forward(RunState *s, TransformerWeights *w, Config *p, int token, int pos) {
-
     embed_token(s->x, w, token, p->dim);
 
     for (int l = 0; l < p->n_layers; l++) {
@@ -17,7 +13,6 @@ float *forward(RunState *s, TransformerWeights *w, Config *p, int token, int pos
         ffn(s->xb2, s->xb, s, w, p, l);
 
         for (int i = 0; i < p->dim; i++) { s->x[i] += s->xb2[i]; }
-
     }
 
     rmsnorm(s->x, s->x, w->rms_final_weight, p->dim);

@@ -5,7 +5,6 @@
 
 #include "tinyllm.h"
 
-
 static int compare_tokens(const void *a, const void *b) {
     const char *s1 = ((const TokenIndex *)a)->str;
     const char *s2 = ((const TokenIndex *)b)->str;
@@ -17,7 +16,7 @@ static int hex_digit(char c) {
     if (c >= 'A' && c <= 'F') return c - 'A' + 10;
     if (c >= 'a' && c <= 'f') return c - 'a' + 10;
     fprintf(stderr, "hex_digit: invalid hex character '%c'\n", c);
-    exit(1);
+    exit(EXIT_FAILURE);
 }
 
 void malloc_tokenizer(Tokenizer *t, const char *path, int vocab_size) {
@@ -26,49 +25,49 @@ void malloc_tokenizer(Tokenizer *t, const char *path, int vocab_size) {
     FILE* f = fopen(path, "rb");
     if (!f) {
         fprintf(stderr, "malloc_tokenizer: cannot open file %s\n", path);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     if (fread(&t->max_token_length, sizeof(unsigned int), 1, f) != 1) {
         fprintf(stderr, "malloc_tokenizer: failed to read header from %s\n", path);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     t->vocab = malloc(vocab_size * sizeof(*t->vocab));
     if (!t->vocab) {
-        fprintf(stderr, "malloc_tokenizer: malloc of %ld bytes failed\n", vocab_size * sizeof(*t->vocab));
-        exit(1);
+        fprintf(stderr, "malloc_tokenizer: malloc of %zu bytes failed\n", vocab_size * sizeof(*t->vocab));
+        exit(EXIT_FAILURE);
     }
     t->vocab_scores = malloc(vocab_size * sizeof(*t->vocab_scores));
     if (!t->vocab_scores) {
-        fprintf(stderr, "malloc_tokenizer: malloc of %ld bytes failed\n", vocab_size * sizeof(*t->vocab_scores));
-        exit(1);
+        fprintf(stderr, "malloc_tokenizer: malloc of %zu bytes failed\n", vocab_size * sizeof(*t->vocab_scores));
+        exit(EXIT_FAILURE);
     }
 
     for (int i = 0; i < vocab_size; i++) {
         if (fread(&t->vocab_scores[i], sizeof(float), 1, f) != 1) {
             fprintf(stderr, "malloc_tokenizer: failed to read score for token %d in %s\n", i, path);
-            exit(1);
+            exit(EXIT_FAILURE);
         }
         int len;
         if (fread(&len, sizeof(int), 1, f) != 1) {
             fprintf(stderr, "malloc_tokenizer: failed to read length for token %d in %s\n", i, path);
-            exit(1);
+            exit(EXIT_FAILURE);
         }
 
         if (len < 0) {
             fprintf(stderr, "malloc_tokenizer: invalid negative length %d for token %d in %s\n", len, i, path);
-            exit(1);
+            exit(EXIT_FAILURE);
         }
 
         char *token = malloc(len + 1);
         if (!token) {
             fprintf(stderr, "malloc_tokenizer: malloc of %d bytes failed\n", len + 1);
-            exit(1);
+            exit(EXIT_FAILURE);
         }
         if (fread(token, 1, len, f) != (size_t)len) {
             fprintf(stderr, "malloc_tokenizer: failed to read token bytes for token %d in %s\n", i, path);
-            exit(1);
+            exit(EXIT_FAILURE);
         }
         token[len] = '\0';
         t->vocab[i] = token;
@@ -81,15 +80,17 @@ void malloc_tokenizer(Tokenizer *t, const char *path, int vocab_size) {
     }
 
     t->sorted_vocab = malloc(t->vocab_size * sizeof(TokenIndex));
+    if (!t->sorted_vocab) {
+        fprintf(stderr, "malloc_tokenizer: malloc of %zu bytes failed\n", t->vocab_size * sizeof(TokenIndex));
+        exit(EXIT_FAILURE);
+    }
     for (int i = 0; i < t->vocab_size; i++) {
         t->sorted_vocab[i].str = t->vocab[i];
         t->sorted_vocab[i].id = i;
     }
 
     qsort(t->sorted_vocab, t->vocab_size, sizeof(TokenIndex), compare_tokens);
-
 }
-
 
 void free_tokenizer(Tokenizer *t) {
     for (int i = 0; i < t->vocab_size; i++) free(t->vocab[i]);
@@ -101,12 +102,12 @@ void free_tokenizer(Tokenizer *t) {
 char *decode(Tokenizer *t, int prev_token, int token) {
     char *piece = t->vocab[token];
 
-    if (prev_token == 1 && piece[0] == ' ') {
+    if (prev_token == TOKEN_BOS && piece[0] == ' ') {
         piece += 1;
     }
 
-    //byte-fallback
-    if (piece[0] == '<' && piece[1] == '0' && piece[2] == 'x' && piece[5] == '>') {
+    // byte-fallback
+    if (strlen(piece) == 6 && piece[0] == '<' && piece[1] == '0' && piece[2] == 'x' && piece[5] == '>') {
         int hi = hex_digit(piece[3]);
         int lo = hex_digit(piece[4]);
         unsigned char byte_val = (hi << 4) | lo;
@@ -114,10 +115,8 @@ char *decode(Tokenizer *t, int prev_token, int token) {
     }
 
     return piece;
-
 }
 int str_lookup(char *str, TokenIndex *sorted_vocab, int vocab_size) {
-
     TokenIndex key;
     key.str = str;
 
@@ -128,9 +127,8 @@ int str_lookup(char *str, TokenIndex *sorted_vocab, int vocab_size) {
 }
 
 void encode(Tokenizer *t, const char *text, int bos, int eos, int *tokens, int *n_tokens) {
-
     int write = 0;
-    if (bos) tokens[write++] = 1;
+    if (bos) tokens[write++] = TOKEN_BOS;
 
     // dummy space prefix
     if (text[0] != '\0') {
@@ -139,14 +137,14 @@ void encode(Tokenizer *t, const char *text, int bos, int eos, int *tokens, int *
 
     unsigned int buf_size = t->max_token_length * 2 + 3;
     char *str_buffer = malloc(buf_size);
-    if(!str_buffer) {
+    if (!str_buffer) {
         fprintf(stderr, "encode: malloc of %u bytes failed\n", buf_size);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     size_t str_len = 0;
 
     for (const char *c = text; *c != '\0'; c++) {
-        // any byte that is not a continuation byte begins a new codeopoint
+        // any byte that is not a continuation byte begins a new codepoint
         if ((*c & 0xC0) != 0x80) str_len = 0;
 
         str_buffer[str_len++] = *c;
@@ -160,7 +158,7 @@ void encode(Tokenizer *t, const char *text, int bos, int eos, int *tokens, int *
             tokens[write++] = id;
         } else {
             for (size_t i = 0; i < str_len; i++) {
-                tokens[write++] = (unsigned char)str_buffer[i] + 3;
+                tokens[write++] = (unsigned char)str_buffer[i] + TOKEN_BYTE_OFFSET;
             }
         }
         str_len = 0;
@@ -193,13 +191,11 @@ void encode(Tokenizer *t, const char *text, int bos, int eos, int *tokens, int *
         write--;
     }
 
-    if (eos) tokens[write++] = 2;
+    if (eos) tokens[write++] = TOKEN_EOS;
 
     free(str_buffer);
     *n_tokens = write;
-
 }
-
 
 void safe_printf(char *piece) {
     if (piece == NULL) return;

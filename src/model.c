@@ -24,7 +24,7 @@ void malloc_run_state(RunState *s, Config *p) {
     if (!s->x   || !s->xb || !s->q || !s->att || !s->hb ||
         !s->hb2 || !s->key_cache || !s->value_cache ||
         !s->xb2 || !s->logits) {
-        fprintf(stderr, "run state allocation failed\n");
+        fprintf(stderr, "malloc_run_state: allocation failed\n");
         exit(EXIT_FAILURE);
     }
 }
@@ -62,7 +62,6 @@ float *memory_map_weights(TransformerWeights *w, Config *p, float *ptr, int shar
     w->wo = ptr;
     ptr += n_layers * (p->n_heads * head_size) * p->dim;
 
-
     w->rms_ffn_weight = ptr;
     ptr += n_layers * p->dim;
 
@@ -87,60 +86,59 @@ float *memory_map_weights(TransformerWeights *w, Config *p, float *ptr, int shar
     }
 
     return ptr;
-
 }
 
 // load a checkpoint: header into 'config', weight pointers into 'weights'
-// 'data' receieves the malloc'd blob (must outlive every pointer in 'weights')
+// 'data' receives the malloc'd blob (must outlive every pointer in 'weights')
 void read_checkpoint(const char *path, Config *config, TransformerWeights *weights,
     float **data, long *file_size) {
-        FILE *file = fopen(path, "rb");
-        if (!file) {
-            fprintf(stderr, "couldn't open %s\n", path);
-            exit(EXIT_FAILURE);
-        }
-        // the 7-int header maps exactly onto Config
-        if (fread(config, sizeof(Config), 1, file) != 1) {
-            fprintf(stderr, "failed to read header from %s\n", path);
-            exit(EXIT_FAILURE);
-        }
-
-        // a negative vocab_size == "classifier is NOT shared" flag
-        int shared_weights = config->vocab_size > 0;
-        config->vocab_size = abs(config->vocab_size);
-
-        fseek(file, 0, SEEK_END);
-        *file_size = ftell(file);
-        rewind(file);
-
-        *data = malloc(*file_size);
-        if (! *data) {
-            fprintf(stderr, "malloc of %ld bytes failed", *file_size);
-            exit(EXIT_FAILURE);
-        }
-        if (fread(*data, 1, *file_size, file) != (size_t)*file_size) {
-            fprintf(stderr, "failed to read %s\n", path);
-            exit(EXIT_FAILURE);
-        }
-        fclose(file);
-
-        //weights begin immediately after the header
-        float *weights_ptr = *data + sizeof(Config) / sizeof(float);
-        float *end = memory_map_weights(weights, config, weights_ptr, shared_weights);
-
-        // the check: the walk must maldn on the last byte of the file exactly
-        long consumed = (long)((char*)end - (char*)*data);
-        if (consumed != *file_size) {
-            fprintf(stderr,
-                "layout mismatch in %s:\n"
-                "walked to byte %ld\n"
-                "file is  %ld bytes\n"
-                "off by %ld bytes (%ld floats)\n",
-                path, consumed, *file_size,
-                consumed - *file_size, (consumed - *file_size) / 4);
-            exit(EXIT_FAILURE);
-        }
-        fprintf(stderr, "loaded %s: %ld bytes, %d layers, dim=%d, vocab=%d, %s classifier\n",
-            path, *file_size, config->n_layers, config->dim, config->vocab_size,
-            shared_weights ? "shared" : "separate");
+    FILE *file = fopen(path, "rb");
+    if (!file) {
+        fprintf(stderr, "read_checkpoint: cannot open file %s\n", path);
+        exit(EXIT_FAILURE);
     }
+    // the 7-int header maps exactly onto Config
+    if (fread(config, sizeof(Config), 1, file) != 1) {
+        fprintf(stderr, "read_checkpoint: failed to read header from %s\n", path);
+        exit(EXIT_FAILURE);
+    }
+
+    // a negative vocab_size == "classifier is NOT shared" flag
+    int shared_weights = config->vocab_size > 0;
+    config->vocab_size = abs(config->vocab_size);
+
+    fseek(file, 0, SEEK_END);
+    *file_size = ftell(file);
+    rewind(file);
+
+    *data = malloc(*file_size);
+    if (! *data) {
+        fprintf(stderr, "read_checkpoint: malloc of %ld bytes failed\n", *file_size);
+        exit(EXIT_FAILURE);
+    }
+    if (fread(*data, 1, *file_size, file) != (size_t)*file_size) {
+        fprintf(stderr, "read_checkpoint: failed to read %s\n", path);
+        exit(EXIT_FAILURE);
+    }
+    fclose(file);
+
+    // weights begin immediately after the header
+    float *weights_ptr = *data + sizeof(Config) / sizeof(float);
+    float *end = memory_map_weights(weights, config, weights_ptr, shared_weights);
+
+    // the check: the walk must land on the last byte of the file exactly
+    long consumed = (long)((char*)end - (char*)*data);
+    if (consumed != *file_size) {
+        fprintf(stderr,
+            "read_checkpoint: layout mismatch in %s:\n"
+            "walked to byte %ld\n"
+            "file is  %ld bytes\n"
+            "off by %ld bytes (%ld floats)\n",
+            path, consumed, *file_size,
+            consumed - *file_size, (consumed - *file_size) / 4);
+        exit(EXIT_FAILURE);
+    }
+    fprintf(stderr, "loaded %s: %ld bytes, %d layers, dim=%d, vocab=%d, %s classifier\n",
+        path, *file_size, config->n_layers, config->dim, config->vocab_size,
+        shared_weights ? "shared" : "separate");
+}

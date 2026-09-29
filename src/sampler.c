@@ -3,21 +3,20 @@
 
 #include "tinyllm.h"
 
-
 void malloc_sampler(Sampler *s, int vocab_size, float temperature, float top_p,
     unsigned long long rng_seed) {
-        s->vocab_size = vocab_size;
-        s->temperature = temperature;
-        s->top_p = top_p;
-        s->rng_state = rng_seed;
-        // scratch for top_p, allocated once
-        s->prob_index = malloc(vocab_size * sizeof(ProbIndex));
+    s->vocab_size = vocab_size;
+    s->temperature = temperature;
+    s->top_p = top_p;
+    s->rng_state = rng_seed;
+    // scratch for top_p, allocated once
+    s->prob_index = malloc(vocab_size * sizeof(ProbIndex));
 
-        if (!s->prob_index) {
-            fprintf(stderr, "sampler allocation failed\n");
-            exit(EXIT_FAILURE);
-        }
+    if (!s->prob_index) {
+        fprintf(stderr, "malloc_sampler: allocation failed\n");
+        exit(EXIT_FAILURE);
     }
+}
 
 void free_sampler(Sampler *s) {
     free(s->prob_index);
@@ -35,26 +34,26 @@ float random_f32(unsigned long long *state){  // uniform in [0, 1)
     return (random_u32(state) >> 8) / 16777216.0f; // 2^24
 }
 
-int sample_argmax(float *probabilites, int n) {
+int sample_argmax(float *probabilities, int n) {
     int index = 0;
-    float maxi = probabilites[0];
+    float maxi = probabilities[0];
 
     for (int i = 1; i < n; i++) {
-        if (probabilites[i] > maxi) {
-            maxi = probabilites[i];
+        if (probabilities[i] > maxi) {
+            maxi = probabilities[i];
             index = i;
         }
     }
 
     return index;
 }
-int sample_mult(float *probabilites, int n, float coin) {
-    /* coin is uniform in [0, 1), walk the cumultative sum,
+int sample_mult(float *probabilities, int n, float coin) {
+    /* coin is uniform in [0, 1), walk the cumulative sum,
      * stop at the first index whose running total passes it */
-    float cumultative = 0.0f;
+    float cumulative = 0.0f;
     for (int i = 0; i < n; i++) {
-        cumultative += probabilites[i];
-        if (cumultative > coin) {
+        cumulative += probabilities[i];
+        if (cumulative > coin) {
             return i;
         }
     }
@@ -70,10 +69,10 @@ static int compare_prob_index(const void *a, const void *b) {
     return 0;
 }
 
-int sample_top_p(float *probabilites, int n, float top_p, ProbIndex *prob_index, float coin) {
+int sample_top_p(float *probabilities, int n, float top_p, ProbIndex *prob_index, float coin) {
     for (int i = 0; i < n; i++) {
         prob_index[i].index = i;
-        prob_index[i].prob = probabilites[i];
+        prob_index[i].prob = probabilities[i];
     }
 
     qsort(prob_index, n, sizeof(ProbIndex), compare_prob_index);
@@ -105,10 +104,8 @@ int sample_top_p(float *probabilites, int n, float top_p, ProbIndex *prob_index,
 }
 
 int sample(Sampler *s, float *logits) {
-    int next;
     if (s->temperature == 0.0f) {
-        next = sample_argmax(logits, s->vocab_size);
-        return next;
+        return sample_argmax(logits, s->vocab_size);
     }
 
     for (int i = 0; i < s->vocab_size; i++) {
@@ -119,10 +116,7 @@ int sample(Sampler *s, float *logits) {
 
     float coin = random_f32(&s->rng_state);
     if (s->top_p <= 0.0f || s->top_p >= 1.0f) {
-        next = sample_mult(logits, s->vocab_size, coin);
-    } else {
-        next = sample_top_p(logits, s->vocab_size, s->top_p, s->prob_index, coin);
+        return sample_mult(logits, s->vocab_size, coin);
     }
-
-    return next;
+    return sample_top_p(logits, s->vocab_size, s->top_p, s->prob_index, coin);
 }

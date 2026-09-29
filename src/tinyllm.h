@@ -16,17 +16,17 @@ typedef struct {
 typedef struct {
     float *token_embedding_table; // (vocab_size, dim)
 
-    //weights for rmsnorms
+    // weights for rmsnorms
     float *rms_att_weight; // (n_layers, dim)
     float *rms_ffn_weight; // (n_layers, dim)
 
-    //weights for the attention block
+    // weights for the attention block
     float *wq; // (n_layers, n_heads * head_size, dim)
     float *wk; // (n_layers, n_kv_heads * head_size, dim)
     float *wv; // (n_layers, n_kv_heads * head_size, dim)
     float *wo; // (n_layers, dim, n_heads * head_size)
 
-    //weights for the ffn
+    // weights for the ffn
     float *w1; // (n_layers, hidden_dim, dim)
     float *w2; // (n_layers, dim, hidden_dim)
     float *w3; // (n_layers, hidden_dim, dim)
@@ -36,10 +36,9 @@ typedef struct {
 
     // classifier weights for the logits, on the last layer
     float *wcls; // (vocab_size, dim) or aliased to the embedding
-
 } TransformerWeights;
 
-//allocated once and reused for every token
+// allocated once and reused for every token
 typedef struct {
     float *x; // residual stream : (dim, )
     float *xb; // the head's outputs, concatenated : (dim, )
@@ -56,7 +55,6 @@ typedef struct {
     float *value_cache; // (n_layers, seq_len, kv_dim)
 
     float *logits; // (vocab_size, )
-
 } RunState;
 
 /* model.c — loading the checkpoint and allocating scratch space */
@@ -114,14 +112,20 @@ void free_sampler(Sampler *s);
 unsigned int random_u32(unsigned long long *state);
 float random_f32(unsigned long long *state); // uniform in [0, 1)
 
-int sample_argmax(float *probabilites, int n);
-int sample_mult(float *probabilites, int n, float coin);
-int sample_top_p(float *probabilites, int n, float top_p, ProbIndex *prob_index, float coin);
+int sample_argmax(float *probabilities, int n);
+int sample_mult(float *probabilities, int n, float coin);
+int sample_top_p(float *probabilities, int n, float top_p, ProbIndex *prob_index, float coin);
 
 int sample(Sampler *s, float *logits);
 
-
 /* tokenizer.c */
+
+// fixed ids in the llama2 sentencepiece vocab
+enum {
+    TOKEN_BOS = 1,         // beginning of sequence, also ends generation
+    TOKEN_EOS = 2,         // end of sequence
+    TOKEN_BYTE_OFFSET = 3, // byte b is token b + 3 (<0x00>..<0xFF>)
+};
 
 typedef struct {
     char *str;
@@ -129,7 +133,7 @@ typedef struct {
 } TokenIndex;
 
 typedef struct {
-    char **vocab; // vocab_size strings, each malloc'd seperately
+    char **vocab; // vocab_size strings, each malloc'd separately
     float *vocab_scores;
     int vocab_size;
     unsigned int max_token_length;

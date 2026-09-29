@@ -12,7 +12,7 @@ static void usage(const char *argv0) {
     fprintf(stderr, "  -n <int>    steps, capped at seq_len     (default 256)\n");
     fprintf(stderr, "  -i <text>   prompt                       (default none)\n");
     fprintf(stderr, "  -s <int>    rng seed                     (default: the time)\n");
-    exit(1);
+    exit(EXIT_FAILURE);
 }
 
 int main(int argc, char **argv) {
@@ -27,23 +27,22 @@ int main(int argc, char **argv) {
     if (i < argc && argv[i][0] != '-') checkpoint = argv[i++];
 
     for (; i < argc; i += 2) {
-    // every flag is exactly two characters and takes exactly one value
-            if (i + 1 >= argc || argv[i][0] != '-' || strlen(argv[i]) != 2) usage(argv[0]);
-            char flag = argv[i][1];
-            const char *val = argv[i + 1];
-            if      (flag == 't') temperature = strtof(val, NULL);
-            else if (flag == 'p') top_p = strtof(val, NULL);
-            else if (flag == 'n') steps = atoi(val);
-            else if (flag == 'i') prompt = val;
-            else if (flag == 's') seed = strtoull(val, NULL, 10);
-            else usage(argv[0]);
+        // every flag is exactly two characters and takes exactly one value
+        if (i + 1 >= argc || argv[i][0] != '-' || strlen(argv[i]) != 2) usage(argv[0]);
+        char flag = argv[i][1];
+        const char *val = argv[i + 1];
+        if      (flag == 't') temperature = strtof(val, NULL);
+        else if (flag == 'p') top_p = strtof(val, NULL);
+        else if (flag == 'n') steps = atoi(val);
+        else if (flag == 'i') prompt = val;
+        else if (flag == 's') seed = strtoull(val, NULL, 10);
+        else usage(argv[0]);
     }
 
     if (temperature < 0.0f) temperature = 0.0f;
     if (top_p < 0.0f || top_p > 1.0f) top_p = 0.9f;
     if (steps <= 0) steps = 256;
     if (seed == 0) seed = 1;
-
 
     Config config;
     TransformerWeights weights;
@@ -67,7 +66,7 @@ int main(int argc, char **argv) {
     int *out = malloc(need * sizeof(int));
     if (!out) {
         fprintf(stderr, "run: malloc of %d ids failed\n", need);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     generate(&state, &weights, &config, &tokenizer, &sampler, prompt, steps, out, need, NULL);
