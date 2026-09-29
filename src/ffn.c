@@ -9,16 +9,15 @@ void ffn(float *out, float *xin, Transformer *m, int layer) {
     Config *p = &m->config;
     TransformerWeights *w = &m->weights;
     RunState *s = &m->state;
-    long long layer_offset = (long long)layer * p->hidden_dim * p->dim;
+    int dim = p->dim, hidden_dim = p->hidden_dim;
 
-    matmul(s->hb,  w->w1 + layer_offset, xin, p->hidden_dim, p->dim);
-    matmul(s->hb2, w->w3 + layer_offset, xin, p->hidden_dim, p->dim);
+    matmul(s->hb,  layer_slice(w->w1, layer, hidden_dim, dim), xin, hidden_dim, dim);
+    matmul(s->hb2, layer_slice(w->w3, layer, hidden_dim, dim), xin, hidden_dim, dim);
 
-    // apply silu on s->hb, and element-wise multiply hb and hb2
-    for (int i = 0; i < p->hidden_dim; i++) {
-        s->hb[i] = silu(s->hb[i]);
-        s->hb[i] = s->hb[i] * s->hb2[i];
+    // gate: silu(w1 x) * (w3 x), element-wise
+    for (int i = 0; i < hidden_dim; i++) {
+        s->hb[i] = silu(s->hb[i]) * s->hb2[i];
     }
 
-    matmul(out, w->w2 + layer_offset, s->hb, p->dim, p->hidden_dim);
+    matmul(out, layer_slice(w->w2, layer, dim, hidden_dim), s->hb, dim, hidden_dim);
 }

@@ -55,18 +55,14 @@ int main(int argc, char **argv) {
 
     Transformer model;
     load_transformer(&model, checkpoint);
-    Config *config = &model.config;
 
     Tokenizer tokenizer;
-    malloc_tokenizer(&tokenizer, "tokenizer.bin", config->vocab_size);
+    malloc_tokenizer(&tokenizer, "tokenizer.bin", model.config.vocab_size);
 
     Sampler sampler;
-    malloc_sampler(&sampler, config->vocab_size, temperature, top_p, seed);
+    malloc_sampler(&sampler, model.config.vocab_size, temperature, top_p, seed);
 
-    int max_steps = steps < config->seq_len ? steps : config->seq_len;
-    int need = (int)strlen(prompt) + 3;
-    if (max_steps + 1 > need) need = max_steps + 1;
-
+    int need = generate_out_size(prompt, steps, model.config.seq_len);
     int *out = xmalloc(need * sizeof(int));
 
     int n_tokens = 0;

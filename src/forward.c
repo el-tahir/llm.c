@@ -1,5 +1,10 @@
 #include "tinyllm.h"
 
+// the residual connection: x += y
+static void add(float *x, const float *y, int n) {
+    for (int i = 0; i < n; i++) x[i] += y[i];
+}
+
 float *forward(Transformer *m, int token, int pos) {
     Config *p = &m->config;
     TransformerWeights *w = &m->weights;
@@ -11,12 +16,12 @@ float *forward(Transformer *m, int token, int pos) {
         rmsnorm(s->xb, s->x, w->rms_att_weight + (l * p->dim), p->dim);
         attention(s->xb2, s->xb, m, l, pos);
 
-        for (int i = 0; i < p->dim; i++) { s->x[i] += s->xb2[i]; }
+        add(s->x, s->xb2, p->dim);
 
         rmsnorm(s->xb, s->x, w->rms_ffn_weight + (l * p->dim), p->dim);
         ffn(s->xb2, s->xb, m, l);
 
-        for (int i = 0; i < p->dim; i++) { s->x[i] += s->xb2[i]; }
+        add(s->x, s->xb2, p->dim);
     }
 
     rmsnorm(s->x, s->x, w->rms_final_weight, p->dim);

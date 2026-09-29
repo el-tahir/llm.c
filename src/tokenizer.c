@@ -11,13 +11,6 @@ static int compare_tokens(const void *a, const void *b) {
     return strcmp(s1, s2);
 }
 
-static int hex_digit(char c) {
-    if (c >= '0' && c <= '9') return c - '0';
-    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-    die("hex_digit: invalid hex character '%c'", c);
-}
-
 void malloc_tokenizer(Tokenizer *t, const char *path, int vocab_size) {
     t->vocab_size = vocab_size;
 
@@ -64,20 +57,13 @@ void free_tokenizer(Tokenizer *t) {
 }
 
 char *decode(Tokenizer *t, int prev_token, int token) {
+    // byte-fallback: ids 3..258 are the pieces <0x00>..<0xFF>, return the raw byte
+    if (token >= TOKEN_BYTE_OFFSET && token < TOKEN_BYTE_OFFSET + 256) {
+        return (char *)t->byte_pieces + 2 * (token - TOKEN_BYTE_OFFSET);
+    }
+
     char *piece = t->vocab[token];
-
-    if (prev_token == TOKEN_BOS && piece[0] == ' ') {
-        piece += 1;
-    }
-
-    // byte-fallback
-    if (strlen(piece) == 6 && piece[0] == '<' && piece[1] == '0' && piece[2] == 'x' && piece[5] == '>') {
-        int hi = hex_digit(piece[3]);
-        int lo = hex_digit(piece[4]);
-        unsigned char byte_val = (hi << 4) | lo;
-        piece = ((char *)t->byte_pieces) + (2 * byte_val);
-    }
-
+    if (prev_token == TOKEN_BOS && piece[0] == ' ') piece++;
     return piece;
 }
 int str_lookup(char *str, TokenIndex *sorted_vocab, int vocab_size) {

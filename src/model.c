@@ -34,50 +34,41 @@ static void free_run_state(RunState *s) {
     free(s->value_cache);
     free(s->logits);
 }
-// walk 'ptr' through the weight blob, recording where each tensor starts
+// hand out the next n floats of the blob and step past them
+static float *take(float **ptr, unsigned long long n) {
+    float *start = *ptr;
+    *ptr += n;
+    return start;
+}
+
+// walk 'ptr' through the weight blob, recording where each tensor starts, in file order
 // returns the address one past the end of the last tensor, for the size check
 static float *memory_map_weights(TransformerWeights *w, Config *p, float *ptr, int shared_weights) {
     int head_size = p->dim / p->n_heads;
     // the products overflow a 32-bit int on larger models, so widen once here
     unsigned long long n_layers = p->n_layers;
+    unsigned long long q_dim = p->n_heads * head_size, kv_dim = p->n_kv_heads * head_size;
 
-    w->token_embedding_table = ptr;
-    ptr += (unsigned long long)p->vocab_size * p->dim;
+    w->token_embedding_table = take(&ptr, (unsigned long long)p->vocab_size * p->dim);
 
-    w->rms_att_weight = ptr;
-    ptr += n_layers * p->dim;
-    w->wq = ptr;
-    ptr += n_layers * p->dim * (p->n_heads * head_size);
-    w->wk = ptr;
-    ptr += n_layers * p->dim * (p->n_kv_heads * head_size);
-    w->wv = ptr;
-    ptr += n_layers * p->dim * (p->n_kv_heads * head_size);
-    w->wo = ptr;
-    ptr += n_layers * (p->n_heads * head_size) * p->dim;
+    w->rms_att_weight = take(&ptr, n_layers * p->dim);
+    w->wq = take(&ptr, n_layers * p->dim * q_dim);
+    w->wk = take(&ptr, n_layers * p->dim * kv_dim);
+    w->wv = take(&ptr, n_layers * p->dim * kv_dim);
+    w->wo = take(&ptr, n_layers * q_dim * p->dim);
 
-    w->rms_ffn_weight = ptr;
-    ptr += n_layers * p->dim;
+    w->rms_ffn_weight = take(&ptr, n_layers * p->dim);
+    w->w1 = take(&ptr, n_layers * p->dim * p->hidden_dim);
+    w->w2 = take(&ptr, n_layers * p->hidden_dim * p->dim);
+    w->w3 = take(&ptr, n_layers * p->dim * p->hidden_dim);
 
-    w->w1 = ptr;
-    ptr += n_layers * p->dim * p->hidden_dim;
-    w->w2 = ptr;
-    ptr += n_layers * p->hidden_dim * p->dim;
-    w->w3 = ptr;
-    ptr += n_layers * p->dim * p->hidden_dim;
+    w->rms_final_weight = take(&ptr, p->dim);
 
-    w->rms_final_weight = ptr;
-    ptr += p->dim;
+    take(&ptr, p->seq_len * head_size / 2); // skip legacy freq_cos
+    take(&ptr, p->seq_len * head_size / 2); // skip legacy freq_sin
 
-    ptr += p->seq_len * head_size / 2; // skip legacy freq_cos
-    ptr += p->seq_len * head_size / 2; // skip legacy freq_sin
-
-    if (shared_weights) {
-        w->wcls = w->token_embedding_table;
-    } else {
-        w->wcls = ptr;
-        ptr += (unsigned long long)p->vocab_size * p->dim;
-    }
-
+    w->wcls = shared_weights ? w->token_embedding_table
+                             : take(&ptr, (unsigned long long)p->vocab_size * p->dim);
     return ptr;
 }
 

@@ -81,6 +81,11 @@ typedef struct {
 void load_transformer(Transformer *m, const char *path);
 void free_transformer(Transformer *m);
 
+// layer 'layer's (rows, cols) slice of a tensor stacked as (n_layers, rows, cols)
+static inline float *layer_slice(float *base, int layer, int rows, int cols) {
+    return base + (long long)layer * rows * cols;
+}
+
 /* primitives.c — the three building blocks */
 
 void rmsnorm(float *o, float *x, float *weight, int size);
@@ -176,6 +181,9 @@ void safe_printf(const char *piece);
  * is produced, along with ctx. generate itself does no output
  */
 typedef void (*TokenCallback)(const char *piece, void *ctx);
+
+// the smallest max_out that fits both the prompt's worst-case encoding and steps + 1 ids
+int generate_out_size(const char *prompt, int steps, int seq_len);
 
 int generate(Transformer *m, Tokenizer *t, Sampler *sampler, const char *prompt, int steps,
              int *out, int max_out, int *out_prompt_len, TokenCallback on_token, void *ctx);

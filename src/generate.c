@@ -3,6 +3,17 @@
 
 #include "tinyllm.h"
 
+// worst case encode: BOS + dummy space + one id per byte + EOS
+static int prompt_max_ids(const char *prompt) {
+    return (int)strlen(prompt) + 3;
+}
+
+int generate_out_size(const char *prompt, int steps, int seq_len) {
+    if (steps > seq_len) steps = seq_len;
+    int need = prompt_max_ids(prompt);
+    return steps + 1 > need ? steps + 1 : need;
+}
+
 int generate(Transformer *m, Tokenizer *t, Sampler *sampler, const char *prompt, int steps,
              int *out, int max_out, int *out_prompt_len, TokenCallback on_token, void *ctx) {
     Config *p = &m->config;
@@ -13,10 +24,9 @@ int generate(Transformer *m, Tokenizer *t, Sampler *sampler, const char *prompt,
         steps = p->seq_len;
     }
 
-    // worst case encode: BOS + dummy space + one id per byte + EOS
-    if ((int)strlen(prompt) + 3 > max_out) {
-        fprintf(stderr, "generate: prompt needs %zu ids, out holds %d\n",
-            strlen(prompt) + 3, max_out);
+    if (prompt_max_ids(prompt) > max_out) {
+        fprintf(stderr, "generate: prompt needs %d ids, out holds %d\n",
+            prompt_max_ids(prompt), max_out);
         return 0;
     }
 
